@@ -52,7 +52,7 @@ struct GameState {
 
 impl GameState {
     pub async fn new() -> Self {
-        let mut physics_world = Physics::new(1.0/60.0, vec2(0.0, -9.8));
+        let mut physics_world = Physics::new(vec2(0.0, -9.8));
         let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
         let truck = Truck::new(&mut physics_world, vec2(0.0, 0.0)).await;
         let mut sprites: Vec<PhysicsSprite> = Vec::new();
@@ -69,7 +69,7 @@ impl GameState {
     }
     pub fn update(&mut self) {
         self.truck.update(&mut self.physics_world);
-        self.physics_world.step();
+        self.physics_world.step(get_frame_time().min(1.0/20.0));
     }
     pub fn draw(&self) {
         for sprite in &self.sprites {
@@ -79,10 +79,19 @@ impl GameState {
     }
 }
 
-#[macroquad::main("Physics")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "Physics".to_string(),
+        window_width: 1200,
+        window_height: 675,
+        ..Default::default()
+    }
+}
+#[macroquad::main(window_conf)]
 async fn main() {
 
     let ball_texture = load_texture("assets/tire.png").await.unwrap();
+    let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
     let mut game_state = GameState::new().await;
     let mut debug = false;
     loop {
@@ -102,15 +111,21 @@ async fn main() {
         if is_mouse_button_pressed(MouseButton::Left) {
             let mut mouse = vec2(mouse_position().0, mouse_position().1);
             mouse = camera.screen_to_world(mouse);
-            let circle = Circle::new(mouse.x, mouse.y, 0.4);
-            let ball = make_ball(&mut game_state.physics_world, &ball_texture, circle);
-            game_state.sprites.push(ball);
+            if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                let rect = Rect::new(mouse.x - 0.5, mouse.y - 0.5, 1.0, 1.0);
+                let phys_box = make_box(&mut game_state.physics_world, &brick_texture, rect);
+                game_state.sprites.push(phys_box);
+            } else {
+                let circle = Circle::new(mouse.x, mouse.y, 0.5);
+                let ball = make_ball(&mut game_state.physics_world, &ball_texture, circle);
+                game_state.sprites.push(ball);
+            }
         }
         if is_key_pressed(KeyCode::I) {
             debug = !debug;
         }
         if debug {
-            game_state.physics_world.draw_debug(GREEN, 0.125);
+            game_state.physics_world.draw_debug(GREEN, 0.0625);
         }
         if is_key_pressed(KeyCode::R) {
             game_state = GameState::new().await;

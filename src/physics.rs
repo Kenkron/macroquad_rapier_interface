@@ -1,4 +1,5 @@
 use macroquad::{prelude::*, shapes};
+use rapier2d::parry::transformation::vhacd::VHACDParameters;
 use rapier2d::prelude::*;
 use rapier2d::crossbeam::channel;
 
@@ -39,8 +40,8 @@ impl PhysicalProperties {
 #[derive(Debug, Clone)]
 pub struct PhysicsSprite {
     pub texture: Texture2D,
-    pub physics: PhysicsHandle,
-    pub size: Vec2
+    pub size: Vec2,
+    pub physics: PhysicsHandle
 }
 
 impl PhysicsSprite {
@@ -71,7 +72,8 @@ impl PhysicsSprite {
     }
 }
 
-/// Assigns a collider to a group that only interacts with that group
+/// Used to assign a collider to a group that only interacts with other
+/// objects within that group.
 ///
 /// Colliders that haven't been assigned a group interact with everything
 /// because they belong to all groups by default
@@ -84,13 +86,21 @@ pub fn isolate_physics_group(group: Group) -> InteractionGroups{
 ///
 /// Vertices must be in clockwise order for a downwards y axis (macroquad's
 /// default camera), or counter-clockwise order for an upwards y axis
-/// The polygon does not need to be concave.
+/// The polygon will be approximated with concave shapes, but may not be
+/// exact.
 pub fn polygon_collider(polygon: &[Vec2]) -> ColliderBuilder {
     let vertices: Vec<Point<Real>> = polygon.iter()
         .map(|p| Point::new(p.x, p.y)).collect();
     let indices: Vec<[u32; 2]> = (0..vertices.len() as u32)
         .map(|i| [i, (i + 1) % vertices.len() as u32 ]).collect();
-    ColliderBuilder::convex_decomposition(&vertices, &indices)
+    ColliderBuilder::convex_decomposition_with_params(
+        &vertices,
+        &indices,
+        &VHACDParameters {
+            concavity: 0.01,
+            ..Default::default()
+        }
+    )
 }
 
 /// State of physics simulation
@@ -112,7 +122,7 @@ pub struct Physics {
 }
 
 impl Physics {
-    pub fn new(timestep: f32, gravity: Vec2) -> Self {
+    pub fn new(gravity: Vec2) -> Self {
         // Initialize the event collector.
         let (collision_send, collision_recv) = channel::unbounded();
         let (contact_force_send, contact_force_recv) = channel::unbounded();
@@ -122,10 +132,7 @@ impl Physics {
             rigid_body_set: RigidBodySet::new(),
             collider_set: ColliderSet::new(),
             physics_pipeline: PhysicsPipeline::new(),
-            integration_parameters: IntegrationParameters{
-                dt: timestep,
-                ..IntegrationParameters::default()
-            },
+            integration_parameters: IntegrationParameters::default(),
             island_manager: IslandManager::new(),
             broad_phase: Box::new(BroadPhaseMultiSap::new()),
             narrow_phase: NarrowPhase::new(),
@@ -136,10 +143,6 @@ impl Physics {
             collision_reciever: collision_recv,
             contact_force_reciever: contact_force_recv
         }
-    }
-
-    pub fn get_timestep(&self) -> f32 {
-        return self.integration_parameters.dt;
     }
 
     /// Adds a body to the physics world with both a rigid body and a collider.
@@ -155,6 +158,16 @@ impl Physics {
             collider_handles.push(handle);
         }
         return PhysicsHandle{body: body_handle, colliders: collider_handles};
+    }
+
+    pub fn destroy_body(&mut self, physics: PhysicsHandle) {
+        self.rigid_body_set.remove(
+            physics.body,
+            &mut self.island_manager,
+            &mut self.collider_set,
+            &mut self.impulse_joint_set,
+            &mut self.multibody_joint_set,
+            true);
     }
 
     /// Hardly does anything, but man it makes my code cleaner
@@ -202,7 +215,8 @@ impl Physics {
         }
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self, time: f32) {
+        self.integration_parameters.dt = time;
         self.physics_pipeline.step(
             &self.gravity,
             &self.integration_parameters,
@@ -243,8 +257,22 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
     match shape.as_typed_shape() {
         TypedShape::Ball(ball) => {
             let center = &vec2(translation.x, translation.y);
-            let size = ball.radius;
-            draw_circle_lines(center.x, center.y, size, stroke, color);
+            draw_circle_lines(center.x, center.y, ball.radius, stroke, color);
+        },
+        TypedShape::Cuboid(cuboid) => {
+            let center = &vec2(translation.x, translation.y);
+            let he = cuboid.half_extents;
+            draw_rectangle_lines_ex(
+                center.x,
+                center.y,
+                he.x * 2.0,
+                he.y * 2.0, stroke,
+                DrawRectangleParams {
+                    rotation: angle,
+                    color,
+                    offset: vec2(he.x, he.y)
+                }
+            );
         },
         TypedShape::ConvexPolygon(polygon) => {
             let center = vec2(translation.x, translation.y);
