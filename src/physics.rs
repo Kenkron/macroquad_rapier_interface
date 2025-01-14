@@ -37,21 +37,26 @@ impl PhysicalProperties {
 }
 
 /// Utility structure that associates a texture with a physics handle
+///
+/// Designed to render such that camera units match physics units
 #[derive(Debug, Clone)]
 pub struct PhysicsSprite {
+    /// The appearance of the sprite, centered on the origin
     pub texture: Texture2D,
+    /// The size of the sprite, irrespective of texture resolution
     pub size: Vec2,
+    /// The physical handles for this sprite
     pub physics: PhysicsHandle
 }
 
 impl PhysicsSprite {
     /// Draws self as a texture centered on the origin
     ///
-    /// * `physics` the physical world in which this object resides
+    /// * `simulation` the physical world in which this object resides
     /// * `inverted_y` set true if the y axis increases downwards
     ///   (this flips rotation and image)
-    pub fn draw(&self, physics: &Physics, inverted_y: bool) {
-        if let Some(body) = physics.rigid_body_set.get(self.physics.body) {
+    pub fn draw(&self, simulation: &PhysicsSimulation, inverted_y: bool) {
+        if let Some(body) = simulation.rigid_body_set.get(self.physics.body) {
             let body_position = body.position();
             let body_translation = body_position.translation;
             let mut size = self.size;
@@ -76,7 +81,7 @@ impl PhysicsSprite {
 /// objects within that group.
 ///
 /// Colliders that haven't been assigned a group interact with everything
-/// because they belong to all groups by default
+/// because they are in all groups by default.
 pub fn isolate_physics_group(group: Group) -> InteractionGroups{
     // A simple function, but I need it to keep from getting confused
     return InteractionGroups::new(group, group);
@@ -104,7 +109,7 @@ pub fn polygon_collider(polygon: &[Vec2]) -> ColliderBuilder {
 }
 
 /// State of physics simulation
-pub struct Physics {
+pub struct PhysicsSimulation {
     pub gravity: Vector<Real>,
     pub rigid_body_set: RigidBodySet,
     pub collider_set: ColliderSet,
@@ -117,11 +122,12 @@ pub struct Physics {
     pub multibody_joint_set: MultibodyJointSet,
     pub ccd_solver: CCDSolver,
     pub event_handler: ChannelEventCollector,
+    pub query_pipeline: QueryPipeline,
     collision_reciever: channel::Receiver<CollisionEvent>,
     contact_force_reciever: channel::Receiver<ContactForceEvent>
 }
 
-impl Physics {
+impl PhysicsSimulation {
     pub fn new(gravity: Vec2) -> Self {
         // Initialize the event collector.
         let (collision_send, collision_recv) = channel::unbounded();
@@ -140,6 +146,7 @@ impl Physics {
             multibody_joint_set: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
             event_handler,
+            query_pipeline: QueryPipeline::new(),
             collision_reciever: collision_recv,
             contact_force_reciever: contact_force_recv
         }
@@ -170,7 +177,9 @@ impl Physics {
             true);
     }
 
-    /// Hardly does anything, but man it makes my code cleaner
+    /// Creates a rotating joint between two bodies
+    ///
+    /// Hardly does anything, but it makes my code cleaner
     pub fn create_joint(
         &mut self,
         properties: &RevoluteJointBuilder,
@@ -180,7 +189,7 @@ impl Physics {
         return self.impulse_joint_set.insert(body1.body, body2.body, properties.build(), true);
     }
 
-    /// Configures a rotating motor on a joint
+    /// Configures a rotating motor on a rotating joint
     pub fn set_motor(
         &mut self,
         joint: ImpulseJointHandle,
@@ -209,12 +218,38 @@ impl Physics {
         }
     }
 
+    /// Find all bodies with colliders that intersect a given point
+    ///
+    /// Uses collider data from the last `step` call. If things have changed
+    /// since then, `self.query_pipeline.update(&self.collider_set);` must
+    /// be called.
+    pub fn get_bodies_at_point(&self, location: Vec2, exclude_fixed: bool) -> Vec<RigidBodyHandle> {
+        let query_filter = if exclude_fixed {QueryFilter::exclude_fixed()} else {QueryFilter::new()};
+        let mut intersections: Vec<ColliderHandle> = Vec::new();
+        self.query_pipeline.intersections_with_point(
+            &self.rigid_body_set,
+            &self.collider_set,
+            &Point::new(location.x, location.y),
+            query_filter,
+            |collider| {
+                intersections.push(collider);
+                // Return true to break early
+                return false;
+            });
+        intersections.iter()
+            .filter_map(|collider_handle| self.collider_set.get(*collider_handle))
+            .filter_map(|collider| collider.parent())
+            .collect()
+    }
+
     pub fn teleport(&mut self, physics: &PhysicsHandle, location: &Vec2) {
         if let Some(body) = self.rigid_body_set.get_mut(physics.body) {
             body.set_position(Isometry::translation(location.x, location.y), true);
         }
     }
 
+    /// Move the simulation forward a given amount of time.
+    /// For consistency, its usually best to use a constant timestep.
     pub fn step(&mut self, time: f32) {
         self.integration_parameters.dt = time;
         self.physics_pipeline.step(
@@ -232,6 +267,7 @@ impl Physics {
             &(),
             &self.event_handler,
           );
+        self.query_pipeline.update(&self.collider_set);
     }
 
     pub fn make_collision_reciever(&self) -> channel::Receiver<CollisionEvent> {
