@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
 mod physics;
@@ -7,35 +9,38 @@ use truck::*;
 
 fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dynamic: bool) -> PhysicsSprite {
     let body_type = if dynamic {RigidBodyType::Dynamic} else {RigidBodyType::Fixed};
-    let mut properties = PhysicalProperties::new(body_type);
-    properties.colliders.push(ColliderBuilder::cuboid(rect.w * 0.5, rect.h * 0.5));
-    properties.set_location(vec2(rect.x + rect.w * 0.5, rect.y + rect.h * 0.5));
-    let physics_handle = physics.create_body(&properties);
+    let body_builder =
+        RigidBodyBuilder::new(body_type)
+        .translation(vector![rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]);
+    let collider_builders = vec![
+        ColliderBuilder::cuboid(rect.w * 0.5, rect.h * 0.5)
+    ];
     return PhysicsSprite{
         texture: texture.clone(),
-        physics: physics_handle,
+        body: physics.create_body(&body_builder, &collider_builders),
         size: vec2(rect.w, rect.h)
     }
 }
 
 fn make_ball(physics: &mut PhysicsSimulation, texture: &Texture2D, circle: Circle) -> PhysicsSprite {
-    let mut properties = PhysicalProperties::new(RigidBodyType::Dynamic);
-    properties.colliders.push(
+    let body_builder =
+        RigidBodyBuilder::new(RigidBodyType::Dynamic)
+        .translation(vector![circle.x, circle.y]);
+    let collider_builders = vec![
         ColliderBuilder::ball(circle.radius())
-        .friction(2.0)
-        .density(2.0));
-    properties.set_location(vec2(circle.x, circle.y));
-    let physics_handle = physics.create_body(&properties);
+            .friction(2.0)
+            .density(2.0)
+    ];
     return PhysicsSprite{
         texture: texture.clone(),
-        physics: physics_handle,
+        body: physics.create_body(&body_builder, &collider_builders),
         size: Vec2::splat(circle.radius() * 2.0)
     }
 }
 
 struct GameState {
     pub simulation: PhysicsSimulation,
-    pub sprites: Vec<PhysicsSprite>,
+    pub sprites: HashMap<RigidBodyHandle, PhysicsSprite>,
     pub truck: Truck
 }
 
@@ -44,30 +49,31 @@ impl GameState {
         let mut simulation = PhysicsSimulation::new(vec2(0.0, -9.8));
         let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
         let truck = Truck::new(&mut simulation, vec2(0.0, 0.0)).await;
-        let mut sprites: Vec<PhysicsSprite> = Vec::new();
+        let mut sprites: HashMap<RigidBodyHandle, PhysicsSprite> = HashMap::new();
         // make floor
         for i in 0..32 {
-            sprites.push(
-                make_box(
-                    &mut simulation,
-                    &brick_texture,
-                    Rect { x: i as f32 - 16.0, y: -9.0, w: 1.0, h: 1.0 },
-                    false));
+            let floor_box = make_box(
+                &mut simulation,
+                &brick_texture,
+                Rect { x: i as f32 - 16.0, y: -9.0, w: 1.0, h: 1.0 },
+                false);
+            sprites.insert(floor_box.body, floor_box);
         }
         // make walls
         for i in 0..18 {
-            sprites.push(
-                make_box(
+            let left_wall = make_box(
                     &mut simulation,
                     &brick_texture,
                     Rect { x: -17.0, y: i as f32 - 9.0, w: 1.0, h: 1.0 },
-                    false));
-            sprites.push(
+                    false);
+            sprites.insert(left_wall.body, left_wall);
+            let right_wall =
                 make_box(
                     &mut simulation,
                     &brick_texture,
                     Rect { x: 16.0, y: i as f32 - 9.0, w: 1.0, h: 1.0 },
-                    false));
+                    false);
+            sprites.insert(right_wall.body, right_wall);
         }
         Self { simulation, sprites, truck }
     }
@@ -76,7 +82,7 @@ impl GameState {
         self.simulation.step(get_frame_time().min(1.0/20.0));
     }
     pub fn draw(&self) {
-        for sprite in &self.sprites {
+        for (_, sprite) in &self.sprites {
             sprite.draw(&self.simulation, false);
         }
         self.truck.draw(&self.simulation);
@@ -93,7 +99,6 @@ fn window_conf() -> Conf {
 }
 #[macroquad::main(window_conf)]
 async fn main() {
-
     let ball_texture = load_texture("assets/tire.png").await.unwrap();
     let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
     let mut game_state = GameState::new().await;
@@ -101,9 +106,8 @@ async fn main() {
     loop {
         clear_background(LIGHTGRAY);
 
-        let aspect_ratio = screen_width()/screen_height();
         let cam_height = 18.0;
-        let cam_width = cam_height * aspect_ratio;
+        let cam_width = cam_height * screen_width() / screen_height();
         let camera: Camera2D = Camera2D::from_display_rect(
             Rect::new(-cam_width * 0.5, -cam_height * 0.5, cam_width, cam_height)
         );
@@ -121,11 +125,11 @@ async fn main() {
             if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
                 let rect = Rect::new(mouse.x - 0.5, mouse.y - 0.5, 1.0, 1.0);
                 let phys_box = make_box(&mut game_state.simulation, &brick_texture, rect, true);
-                game_state.sprites.push(phys_box);
+                game_state.sprites.insert(phys_box.body, phys_box);
             } else {
                 let circle = Circle::new(mouse.x, mouse.y, 0.5);
                 let ball = make_ball(&mut game_state.simulation, &ball_texture, circle);
-                game_state.sprites.push(ball);
+                game_state.sprites.insert(ball.body, ball);
             }
         }
         // Right click to remove sprites
@@ -133,19 +137,11 @@ async fn main() {
             let mut mouse = vec2(mouse_position().0, mouse_position().1);
             mouse = camera.screen_to_world(mouse);
             let intersecting_bodies = game_state.simulation.get_bodies_at_point(mouse, true);
-            let mut removed_sprites: Vec<PhysicsSprite> = Vec::new();
             for body in intersecting_bodies {
-                let mut i = 0;
-                while i < game_state.sprites.len() {
-                    if game_state.sprites[i].physics.body == body {
-                        removed_sprites.push(game_state.sprites.remove(i));
-                    } else {
-                        i += 1;
-                    }
+                let removed = game_state.sprites.remove(&body);
+                if removed.is_some() {
+                    game_state.simulation.destroy_body(body);
                 }
-            }
-            for sprite in removed_sprites {
-                game_state.simulation.destroy_body(sprite.physics);
             }
         }
         // Press r to reset the simulation
@@ -159,6 +155,15 @@ async fn main() {
         if debug {
             game_state.simulation.draw_debug(GREEN, 0.0625);
         }
+
+        // Reset to the default camera for drawing text
+        set_default_camera();
+        draw_text(&format!("FPS: {}", get_fps()), 100.0, 20.0, 20.0, DARKBLUE);
+        draw_text("Press W and S to drive the truck forward and backwards", 100.0, 40.0, 20.0, DARKBLUE);
+        draw_text("Left Click to add a circle", 100.0, 60.0, 20.0, DARKBLUE);
+        draw_text("Shift + Left Click to add a square", 100.0, 80.0, 20.0, DARKBLUE);
+        draw_text("Right Click to remove a shape", 100.0, 100.0, 20.0, DARKBLUE);
+        draw_text("I to toggle debug drawing", 100.0, 120.0, 20.0, DARKBLUE);
 
         next_frame().await
     }

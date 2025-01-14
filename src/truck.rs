@@ -1,6 +1,6 @@
-use macroquad::{prelude::*, telemetry::Frame};
+use macroquad::prelude::*;
 use rapier2d::prelude::*;
-use crate::physics::{self, *};
+use crate::physics::*;
 
 /// A Truck is a relatively complex physical structure.
 ///
@@ -11,7 +11,7 @@ use crate::physics::{self, *};
 /// colliding. This is accomplished with collision groups.
 ///
 /// Additionally, because of the truck bed, the body of the truck is
-/// convex, and must be split into multiplie colliders.
+/// convex, and must be use a convex decomposition.
 pub struct Truck {
     front_wheel: PhysicsSprite,
     rear_wheel: PhysicsSprite,
@@ -31,34 +31,40 @@ impl Truck {
         let wheel_group = isolate_physics_group(Group::GROUP_1);
         let frame_group = isolate_physics_group(Group::GROUP_2);
 
-        // Texture and properties of a wheel
+        // Texture and shape of a wheel
         const WHEEL_RADIUS: f32 = 0.75;
         let wheel_texture = load_texture("assets/tire.png").await.unwrap();
-        let mut wheel_properties = PhysicalProperties::new(RigidBodyType::Dynamic);
-        wheel_properties.colliders.push(
+        let wheel_colliders = vec![
             ColliderBuilder::ball(WHEEL_RADIUS)
                 .collision_groups(wheel_group)
                 .friction(2.0)
-        );
+        ];
 
         // Rear wheel
-        wheel_properties.set_location(location - REAR_WHEEL_POSITION);
+        let rear_wheel_location = to_physics_vector(location - REAR_WHEEL_POSITION);
+        let rear_wheel_body = RigidBodyBuilder::new(RigidBodyType::Dynamic).translation(rear_wheel_location);
         let rear_wheel = PhysicsSprite {
             texture: wheel_texture.clone(),
-            physics: simulation.create_body(&wheel_properties),
+            body: simulation.create_body(&rear_wheel_body, &wheel_colliders),
             size: Vec2::splat(WHEEL_RADIUS * 2.0)
         };
 
         // Front wheel
-        wheel_properties.set_location(location - FRONT_WHEEL_POSITION);
+        let front_wheel_location = to_physics_vector(location - FRONT_WHEEL_POSITION);
+        let front_wheel_body =
+            RigidBodyBuilder::new(RigidBodyType::Dynamic)
+            .translation(front_wheel_location);
         let front_wheel = PhysicsSprite {
             texture: wheel_texture.clone(),
-            physics: simulation.create_body(&wheel_properties),
+            body: simulation.create_body(&rear_wheel_body, &wheel_colliders),
             size: Vec2::splat(WHEEL_RADIUS * 2.0)
         };
 
         // Texture and properties of the frame
         let frame_texture = load_texture("assets/truck_frame.png").await.unwrap();
+        let frame_builder =
+            RigidBodyBuilder::new(RigidBodyType::Dynamic)
+            .translation(to_physics_vector(location));
         let frame_shape = [
             vec2(3.0, -0.75),
             vec2(3.0, 0.15),
@@ -69,26 +75,27 @@ impl Truck {
             vec2(-3.0, 0.05),
             vec2(-3.0, -0.75)
         ];
-        let mut frame_properties = PhysicalProperties::new(RigidBodyType::Dynamic);
-        frame_properties.colliders.push(polygon_collider(&frame_shape).collision_groups(frame_group));
+        let collider_builders = vec![
+            polygon_collider(&frame_shape).collision_groups(frame_group)
+        ];
         let frame = PhysicsSprite {
             texture: frame_texture,
-            physics: simulation.create_body(&frame_properties),
+            body: simulation.create_body(&frame_builder, &collider_builders),
             size: vec2(6.0, 1.5)
         };
 
         // Make front wheel drive
         let joint_properties = RevoluteJointBuilder::new()
-                .local_anchor1(vec_to_point(FRONT_WHEEL_POSITION))
+                .local_anchor1(to_physics_point(FRONT_WHEEL_POSITION))
                 .local_anchor2(Point::new(0., 0.));
-        let front_wheel_drive = simulation.create_joint(&joint_properties, &frame.physics, &front_wheel.physics);
+        let front_wheel_drive = simulation.create_joint(&joint_properties, frame.body, front_wheel.body);
         //physics.set_motor(front_wheel_drive, 10.0, 0.0, 1.0);
 
         // Make front wheel drive
         let joint_properties = RevoluteJointBuilder::new()
-                .local_anchor1(vec_to_point(REAR_WHEEL_POSITION))
+                .local_anchor1(to_physics_point(REAR_WHEEL_POSITION))
                 .local_anchor2(Point::new(0., 0.));
-        let rear_wheel_drive = simulation.create_joint(&joint_properties, &frame.physics, &rear_wheel.physics);
+        let rear_wheel_drive = simulation.create_joint(&joint_properties, frame.body, rear_wheel.body);
         //physics.set_motor(front_wheel_drive, 10.0, 0.0, 1.0);
 
         Self {
@@ -101,7 +108,7 @@ impl Truck {
     }
 
     pub fn update(&self, simulation: &mut PhysicsSimulation) {
-        let torque = 30.0;
+        let torque = 40.0;
         let mut speed = 0.0;
         if is_key_down(KeyCode::W) {
             speed -= 15.0;

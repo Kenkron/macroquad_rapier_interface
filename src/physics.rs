@@ -1,42 +1,17 @@
-use macroquad::{prelude::*, shapes};
+use macroquad::prelude::*;
 use rapier2d::parry::transformation::vhacd::VHACDParameters;
 use rapier2d::prelude::*;
 use rapier2d::crossbeam::channel;
 
-pub fn vec_to_point(source: Vec2) -> Point<Real> {
+pub fn to_physics_point(source: Vec2) -> Point<Real> {
     Point::new(source.x, source.y)
 }
 
-/// Handles for a body and a collider
-#[derive(Debug, Default, Clone)]
-pub struct PhysicsHandle {
-    pub body: RigidBodyHandle,
-    pub colliders: Vec<ColliderHandle>
+pub fn to_physics_vector(source: Vec2) -> Vector<Real> {
+    vector![source.x, source.y]
 }
 
-/// Properties for the body and collider of an object
-#[derive(Debug, Default, Clone)]
-pub struct PhysicalProperties {
-    pub body: RigidBodyBuilder,
-    pub colliders: Vec<ColliderBuilder>
-}
-
-impl PhysicalProperties {
-    pub fn new(body_type: RigidBodyType) -> Self {
-        Self {
-            body: RigidBodyBuilder::new(body_type),
-            colliders: Vec::new()
-        }
-    }
-    pub fn set_location(&mut self, location: Vec2) {
-        self.body = self.body.clone().translation(vector![location.x, location.y]);
-    }
-    pub fn set_rotation(&mut self, angle: f32) {
-        self.body = self.body.clone().rotation(angle);
-    }
-}
-
-/// Utility structure that associates a texture with a physics handle
+/// Utility structure that associates a texture with a rigid body
 ///
 /// Designed to render such that camera units match physics units
 #[derive(Debug, Clone)]
@@ -45,8 +20,8 @@ pub struct PhysicsSprite {
     pub texture: Texture2D,
     /// The size of the sprite, irrespective of texture resolution
     pub size: Vec2,
-    /// The physical handles for this sprite
-    pub physics: PhysicsHandle
+    /// The physical body for this sprite
+    pub body: RigidBodyHandle
 }
 
 impl PhysicsSprite {
@@ -56,7 +31,7 @@ impl PhysicsSprite {
     /// * `inverted_y` set true if the y axis increases downwards
     ///   (this flips rotation and image)
     pub fn draw(&self, simulation: &PhysicsSimulation, inverted_y: bool) {
-        if let Some(body) = simulation.rigid_body_set.get(self.physics.body) {
+        if let Some(body) = simulation.rigid_body_set.get(self.body) {
             let body_position = body.position();
             let body_translation = body_position.translation;
             let mut size = self.size;
@@ -152,24 +127,27 @@ impl PhysicsSimulation {
         }
     }
 
-    /// Adds a body to the physics world with both a rigid body and a collider.
-    pub fn create_body(&mut self, properties: &PhysicalProperties) -> PhysicsHandle {
-        let body_handle = self.rigid_body_set.insert(properties.body.build());
+    /// Adds a body to the physics simulation with colliders.
+    pub fn create_body(&mut self, body_builder: &RigidBodyBuilder, collider_builders: &[ColliderBuilder]) -> RigidBodyHandle {
+        let body_handle = self.rigid_body_set.insert(body_builder.build());
         let mut collider_handles: Vec<ColliderHandle> = Vec::new();
-        for collider in &properties.colliders {
+        for collider_builder in collider_builders {
             let handle =
                 self.collider_set.insert_with_parent(
-                    collider.build(),
+                    collider_builder.build(),
                     body_handle,
                     &mut self.rigid_body_set);
             collider_handles.push(handle);
         }
-        return PhysicsHandle{body: body_handle, colliders: collider_handles};
+        return body_handle;
     }
 
-    pub fn destroy_body(&mut self, physics: PhysicsHandle) {
+    /// Removes a body from the simulation
+    ///
+    /// Also removes its colliders and joints.
+    pub fn destroy_body(&mut self, body: RigidBodyHandle) {
         self.rigid_body_set.remove(
-            physics.body,
+            body,
             &mut self.island_manager,
             &mut self.collider_set,
             &mut self.impulse_joint_set,
@@ -183,10 +161,10 @@ impl PhysicsSimulation {
     pub fn create_joint(
         &mut self,
         properties: &RevoluteJointBuilder,
-        body1: &PhysicsHandle,
-        body2: &PhysicsHandle)
+        body1: RigidBodyHandle,
+        body2: RigidBodyHandle)
     -> ImpulseJointHandle {
-        return self.impulse_joint_set.insert(body1.body, body2.body, properties.build(), true);
+        return self.impulse_joint_set.insert(body1, body2, properties.build(), true);
     }
 
     /// Configures a rotating motor on a rotating joint
@@ -242,8 +220,8 @@ impl PhysicsSimulation {
             .collect()
     }
 
-    pub fn teleport(&mut self, physics: &PhysicsHandle, location: &Vec2) {
-        if let Some(body) = self.rigid_body_set.get_mut(physics.body) {
+    pub fn teleport(&mut self, body: RigidBodyHandle, location: &Vec2) {
+        if let Some(body) = self.rigid_body_set.get_mut(body) {
             body.set_position(Isometry::translation(location.x, location.y), true);
         }
     }
