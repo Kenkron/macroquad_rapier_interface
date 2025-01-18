@@ -4,8 +4,9 @@ use macroquad::prelude::*;
 use rapier2d::prelude::*;
 mod physics;
 use physics::*;
-mod truck;
-use truck::*;
+mod simple_truck;
+mod complex_truck;
+mod svg;
 
 fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dynamic: bool) -> PhysicsSprite {
     let body_type = if dynamic {RigidBodyType::Dynamic} else {RigidBodyType::Fixed};
@@ -41,14 +42,14 @@ fn make_ball(physics: &mut PhysicsSimulation, texture: &Texture2D, circle: Circl
 struct GameState {
     pub simulation: PhysicsSimulation,
     pub sprites: HashMap<RigidBodyHandle, PhysicsSprite>,
-    pub truck: Truck
+    pub truck: complex_truck::Truck
 }
 
 impl GameState {
     pub async fn new() -> Self {
         let mut simulation = PhysicsSimulation::new(vec2(0.0, -9.8));
         let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
-        let truck = Truck::new(&mut simulation, vec2(0.0, 0.0)).await;
+        let truck = complex_truck::Truck::new(&mut simulation, vec2(0.0, 0.0)).await;
         let mut sprites: HashMap<RigidBodyHandle, PhysicsSprite> = HashMap::new();
         // make floor
         for i in 0..32 {
@@ -106,6 +107,7 @@ async fn main() {
     loop {
         clear_background(LIGHTGRAY);
 
+        // Use a scaled, y-axis-up camera for the world
         let cam_height = 18.0;
         let cam_width = cam_height * screen_width() / screen_height();
         let camera: Camera2D = Camera2D::from_display_rect(
@@ -156,7 +158,7 @@ async fn main() {
             game_state.simulation.draw_debug(GREEN, 0.0625);
         }
 
-        // Reset to the default camera for drawing text
+        // Reset to the default camera for the HUD
         set_default_camera();
         draw_text(&format!("FPS: {}", get_fps()), 100.0, 20.0, 20.0, DARKBLUE);
         draw_text("Press W and S to drive the truck forward and backwards", 100.0, 40.0, 20.0, DARKBLUE);

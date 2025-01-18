@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+base64 = "0.22.1"
 macroquad = "0.4.13"
 rapier2d = "0.23.0"
+xml-rs = "0.8.25"
