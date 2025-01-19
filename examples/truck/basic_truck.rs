@@ -2,13 +2,10 @@ use macroquad::prelude::*;
 use rapier2d::prelude::*;
 use crate::physics::*;
 
-/// A Truck is a relatively complex physical structure.
-///
-/// It contains a front wheel, rear wheel, and a body, as well as motors
-/// to turn the wheels.
-///
-/// Because of the truck bed, the body of the truck is convex,
-/// and must be use a convex decomposition.
+/// The same as [truck::Truck], except this version uses an explicit
+/// png image and manual vectors, instead of loading both from an svg,
+/// and uses a simple rotation joint for the wheels, rather than
+/// a joint with springs as well.
 pub struct Truck {
     front_wheel: PhysicsSprite,
     rear_wheel: PhysicsSprite,
