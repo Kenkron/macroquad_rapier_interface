@@ -256,43 +256,42 @@ impl PhysicsSimulation {
         self.contact_force_reciever.clone()
     }
 
-    pub fn draw_debug(&self, color: Color, stroke: f32) {
+    pub fn draw_debug(&self, color: Color, stroke: f32, y_down: bool) {
         for (_, collider) in self.collider_set.iter() {
             let shape = collider.shape();
             let position = collider.position();
-            draw_shape(shape, position, color, stroke);
+            draw_shape(shape, position, color, stroke, y_down);
         }
     }
 }
 
-pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, stroke: f32) {
+pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, stroke: f32, y_down: bool) {
+    let y_scale = if y_down { vec2(1.0, -1.0) } else { vec2(1.0, 1.0) };
     let translation = position.translation;
+    let center = vec2(translation.x, y_scale.y * translation.y);
     let angle = position.rotation.angle();
     match shape.as_typed_shape() {
         TypedShape::Ball(ball) => {
-            let center = &vec2(translation.x, translation.y);
             draw_circle_lines(center.x, center.y, ball.radius, stroke, color);
         },
         TypedShape::Cuboid(cuboid) => {
-            let center = &vec2(translation.x, translation.y);
             let he = cuboid.half_extents;
             draw_rectangle_lines_ex(
                 center.x,
                 center.y,
                 he.x * 2.0,
-                he.y * 2.0, stroke,
+                he.y * 2.0 * y_scale.y, stroke,
                 DrawRectangleParams {
-                    rotation: angle,
+                    rotation: angle * y_scale.y,
                     color,
-                    offset: vec2(he.x, he.y)
+                    offset: vec2(0.5, 0.5)
                 }
             );
         },
         TypedShape::ConvexPolygon(polygon) => {
-            let center = vec2(translation.x, translation.y);
             let mut vertices: Vec<Vec2> = Vec::new();
             for point in polygon.points() {
-                vertices.push(vec2(point.x, point.y).rotate(vec2(angle.cos(), angle.sin())));
+                vertices.push(y_scale * vec2(point.x, point.y).rotate(vec2(angle.cos(), angle.sin())));
             }
             for i in 0..vertices.len() {
                 let point = center + vertices[i];
@@ -303,16 +302,16 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
         TypedShape::Compound(compound) => {
             let shapes = compound.shapes();
             for (isometry, shape) in shapes {
-                draw_shape(shape.as_ref(), &(isometry * position), color, stroke);
+                draw_shape(shape.as_ref(), &(isometry * position), color, stroke, y_down);
             }
         },
         _ => {
             let aabb = shape.compute_aabb(position);
             let r = Rect::new(
                 aabb.mins.x,
-                aabb.mins.y,
+                aabb.mins.y * y_scale.y,
                 aabb.half_extents().x * 2.0,
-                aabb.half_extents().y * 2.0);
+                aabb.half_extents().y * 2.0 * y_scale.y);
             draw_rectangle_lines(r.x, r.y, r.w, r.h, stroke, color);
         }
     }

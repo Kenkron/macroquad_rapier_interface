@@ -64,7 +64,7 @@ pub fn load_physics_paths(svg: &str, mut center: Vec2, mut scale: Vec2, curve_se
         match e {
             Ok(XmlEvent::StartElement { name, attributes, namespace: _ }) => {
                 if let Some(path) = load_path(&name, &attributes, center, scale, curve_segments) {
-                    result.push(path);
+                    result.push(polygon_collider(&path));
                 }
             }
             Err(e) => {
@@ -77,8 +77,11 @@ pub fn load_physics_paths(svg: &str, mut center: Vec2, mut scale: Vec2, curve_se
     result
 }
 
+/// Attempts to load a path from an xml tag.
+///
+/// Returns None if the tag is not a "path", or if path loading fails.
 pub fn load_path(name: &OwnedName, attributes: &[OwnedAttribute], center: Vec2, scale: Vec2, curve_segments: i32)
--> Option<ColliderBuilder> {
+-> Option<Vec<Vec2>> {
     if &name.local_name != "path" {
         return None;
     }
@@ -87,7 +90,7 @@ pub fn load_path(name: &OwnedName, attributes: &[OwnedAttribute], center: Vec2, 
             let path = parse_path_data(&attr.value, curve_segments)?;
             let polygon: Vec<Vec2> =
                 path.iter().map(|x| *x * scale - center).collect();
-            return Some(polygon_collider(&polygon));
+            return Some(polygon);
         }
     }
     return None;

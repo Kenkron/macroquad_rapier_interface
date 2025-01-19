@@ -16,12 +16,16 @@ Features:
 * `draw_debug` function to see what's going on
 * `get_bodies_at_point` function to sample a point in a single line of code
 * `step` function that only takes one f32 argument
+* `load_svg_physics_sprite` No more counting pixels to outline your sprites.
+  Just open the image in inkscape, draw an outline, and save with the image
+  embedded. This function will load the texture, and use all of the paths it
+  finds as the physical outline.
 
 In general, `physics.rs` attempts to make simple things simple to do, while
 presenting no obstruction to doing more complex things.
 Rapier2D is confusing. If nothing else, this can work as a reference for how
 to do a few basic things.
 
-Note: I'm currently going through dependency hell in nodejs, so until the
-butthurt subsides, I'm going to leave the interface as a single file instead
-of a proper library.
+Note: When rendering, this library matches screen units to camera units, and
+if the y axis of the camera is down, rapier's rotation will be inverted
+(because it uses a coordinate system with the y axis up).

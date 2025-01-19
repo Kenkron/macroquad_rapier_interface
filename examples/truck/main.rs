@@ -12,7 +12,7 @@ fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dy
         RigidBodyBuilder::new(body_type)
         .translation(vector![rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]);
     let collider_builders = vec![
-        ColliderBuilder::cuboid(rect.w * 0.5, rect.h * 0.5)
+        ColliderBuilder::cuboid(rect.w * 0.5, rect.h * 0.5).friction(0.75)
     ];
     return PhysicsSprite{
         texture: texture.clone(),
@@ -123,7 +123,7 @@ async fn main() {
             mouse = camera.screen_to_world(mouse);
             // Use shift to add a square, otherwise adds a circle
             if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
-                let rect = Rect::new(mouse.x - 0.5, mouse.y - 0.5, 1.0, 1.0);
+                let rect = Rect::new(mouse.x - 0.5, mouse.y - 0.5, 0.9, 0.9);
                 let phys_box = make_box(&mut game_state.simulation, &brick_texture, rect, true);
                 game_state.sprites.insert(phys_box.body, phys_box);
             } else {
@@ -153,7 +153,7 @@ async fn main() {
             debug = !debug;
         }
         if debug {
-            game_state.simulation.draw_debug(GREEN, 0.0625);
+            game_state.simulation.draw_debug(GREEN, 0.0625, false);
         }
 
         // Reset to the default camera for the HUD
