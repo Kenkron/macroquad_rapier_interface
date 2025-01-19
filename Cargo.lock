@@ -288,6 +288,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64b1d96218903768c1ce078b657c0d5965465c95a60d2682fd97443c9d2483dd"
 
 [[package]]
+name = "macroquad_rapier_interface"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "macroquad",
+ "rapier2d",
+ "xml-rs",
+]
+
+[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -530,16 +540,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4dccaaaf89514f546c693ddc140f729f958c247918a13380cccc6078391acc"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "rapier-macroquad-interface"
-version = "0.1.0"
-dependencies = [
- "base64",
- "macroquad",
- "rapier2d",
- "xml-rs",
 ]
 
 [[package]]

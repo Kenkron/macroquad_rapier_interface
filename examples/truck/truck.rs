@@ -79,7 +79,7 @@ impl Truck {
             simulation,
             &frame_builder,
             &ColliderBuilder::default(),
-            include_str!("../assets/truck_frame.svg"),
+            include_str!("../../assets/truck_frame.svg"),
             vec2(6.0, 1.5),
             false).unwrap();
 

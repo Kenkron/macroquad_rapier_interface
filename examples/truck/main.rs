@@ -2,11 +2,9 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
-mod physics;
+extern crate macroquad_rapier_interface as physics;
 use physics::*;
-mod simple_truck;
-mod complex_truck;
-mod svg;
+mod truck;
 
 fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dynamic: bool) -> PhysicsSprite {
     let body_type = if dynamic {RigidBodyType::Dynamic} else {RigidBodyType::Fixed};
@@ -42,14 +40,14 @@ fn make_ball(physics: &mut PhysicsSimulation, texture: &Texture2D, circle: Circl
 struct GameState {
     pub simulation: PhysicsSimulation,
     pub sprites: HashMap<RigidBodyHandle, PhysicsSprite>,
-    pub truck: complex_truck::Truck
+    pub truck: truck::Truck
 }
 
 impl GameState {
     pub async fn new() -> Self {
         let mut simulation = PhysicsSimulation::new(vec2(0.0, -9.8));
         let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
-        let truck = complex_truck::Truck::new(&mut simulation, vec2(0.0, 0.0)).await;
+        let truck = truck::Truck::new(&mut simulation, vec2(0.0, 0.0)).await;
         let mut sprites: HashMap<RigidBodyHandle, PhysicsSprite> = HashMap::new();
         // make floor
         for i in 0..32 {

@@ -30,11 +30,10 @@ pub fn load_svg_physics_sprite(
     size: Vec2,
     y_down: bool)
 -> Option<PhysicsSprite> {
-    let flip = vec2(1.0, if y_down {1.0} else {-1.0});
     let canvas_size = load_svg_canvas_size(svg).unwrap_or(size);
     let texture = load_svg_texture(svg)?;
     let mut paths =
-        load_physics_paths(svg, flip * size / 2.0, flip * size / canvas_size);
+        load_physics_paths(svg, size / 2.0, size / canvas_size, 8, y_down);
     // Give the colliders the correct properties
     paths = paths.iter().map(|shaped_collider| {
         let mut result = collider_properties.clone();
@@ -54,13 +53,17 @@ pub fn load_svg_physics_sprite(
 ///
 /// This function will load svg data and make colliders out of any paths
 /// it finds.
-pub fn load_physics_paths(svg: &str, center: Vec2, scale: Vec2) -> Vec<ColliderBuilder> {
+pub fn load_physics_paths(svg: &str, mut center: Vec2, mut scale: Vec2, curve_segments: i32, y_down: bool) -> Vec<ColliderBuilder> {
+    if !y_down {
+        scale.y *= -1.0;
+        center.y *= -1.0;
+    }
     let mut result: Vec<ColliderBuilder> = Vec::new();
     let parser = EventReader::new(svg.as_bytes());
     for e in parser {
         match e {
             Ok(XmlEvent::StartElement { name, attributes, namespace: _ }) => {
-                if let Some(path) = load_path(&name, &attributes, center, scale) {
+                if let Some(path) = load_path(&name, &attributes, center, scale, curve_segments) {
                     result.push(path);
                 }
             }
@@ -74,14 +77,14 @@ pub fn load_physics_paths(svg: &str, center: Vec2, scale: Vec2) -> Vec<ColliderB
     result
 }
 
-pub fn load_path(name: &OwnedName, attributes: &[OwnedAttribute], center: Vec2, scale: Vec2)
+pub fn load_path(name: &OwnedName, attributes: &[OwnedAttribute], center: Vec2, scale: Vec2, curve_segments: i32)
 -> Option<ColliderBuilder> {
     if &name.local_name != "path" {
         return None;
     }
     for attr in attributes {
         if attr.name.local_name.as_str() == "d" {
-            let path = parse_path_data(&attr.value)?;
+            let path = parse_path_data(&attr.value, curve_segments)?;
             let polygon: Vec<Vec2> =
                 path.iter().map(|x| *x * scale - center).collect();
             return Some(polygon_collider(&polygon));
@@ -94,7 +97,7 @@ pub fn load_path(name: &OwnedName, attributes: &[OwnedAttribute], center: Vec2, 
 ///
 /// Bezier curves are interpolated to have 8 segments.
 /// Arcs are not supported, and are replaced with straight lines.
-pub fn parse_path_data(data: &str) -> Option<Vec<Vec2>> {
+pub fn parse_path_data(data: &str, curve_segments: i32) -> Option<Vec<Vec2>> {
     let mut tokens = data.split_ascii_whitespace().into_iter();
     let mut previous_control = Option::<Vec2>::None;
     let mut result: Vec<Vec2> = Vec::new();
@@ -104,7 +107,6 @@ pub fn parse_path_data(data: &str) -> Option<Vec<Vec2>> {
             break;
         }
         if "mlhvcsqta".contains(&token.to_lowercase()) {
-            println!("mode: {}", token);
             mode = token;
             continue;
         }
@@ -117,8 +119,6 @@ pub fn parse_path_data(data: &str) -> Option<Vec<Vec2>> {
                 vec2(0.0, 0.0)
             };
 
-        let bezier_segments = 8;
-        println!("token: {}", token);
         match lowercase_mode.as_str() {
             // moveto: Lines must be continuous. Treated as lineto
             "m" => {
@@ -139,19 +139,19 @@ pub fn parse_path_data(data: &str) -> Option<Vec<Vec2>> {
             },
             "c" => {
                 previous_control =
-                    Some(form_bezier(bezier_segments, origin, &mut result, None, 2, token, &mut tokens)?);
+                    Some(form_bezier(curve_segments, origin, &mut result, None, 2, token, &mut tokens)?);
             },
             "s" => {
                 previous_control =
-                    Some(form_bezier(bezier_segments, origin, &mut result, previous_control, 2, token, &mut tokens)?);
+                    Some(form_bezier(curve_segments, origin, &mut result, previous_control, 2, token, &mut tokens)?);
             },
             "q" => {
                 previous_control =
-                    Some(form_bezier(bezier_segments, origin, &mut result, None, 1, token, &mut tokens)?);
+                    Some(form_bezier(curve_segments, origin, &mut result, None, 1, token, &mut tokens)?);
             },
             "t" => {
                 previous_control =
-                    Some(form_bezier(bezier_segments, origin, &mut result, previous_control, 1, token, &mut tokens)?);
+                    Some(form_bezier(curve_segments, origin, &mut result, previous_control, 1, token, &mut tokens)?);
             },
             "a" => {
                 eprintln!("Arcs are not supported. Replacing with line")
@@ -159,7 +159,6 @@ pub fn parse_path_data(data: &str) -> Option<Vec<Vec2>> {
             "z" => { break; },
             _ => {}
         }
-        println!("point: {}", result.last().unwrap_or(&vec2(0.0, 0.0)));
     }
     Some(result)
 }
@@ -281,6 +280,10 @@ pub fn load_svg_canvas_size(svg: &str) -> Option<Vec2> {
                     }
                 }
             },
+            Err(e) => {
+                eprintln!("Error: {e}");
+                break;
+            }
             _ => {}
         }
     }
