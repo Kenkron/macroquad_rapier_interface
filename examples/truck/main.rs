@@ -153,7 +153,7 @@ async fn main() {
             debug = !debug;
         }
         if debug {
-            game_state.simulation.draw_debug(GREEN, 0.0625, false);
+            game_state.simulation.draw_debug(GREEN, 0.0625);
         }
 
         // Reset to the default camera for the HUD

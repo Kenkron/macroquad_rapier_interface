@@ -28,16 +28,14 @@ impl PhysicsSprite {
     /// Draws self as a texture centered on the origin
     ///
     /// * `simulation` the physical world in which this object resides
-    /// * `inverted_y` set true if the y axis increases downwards
-    ///   (this flips rotation and image)
-    pub fn draw(&self, simulation: &PhysicsSimulation, inverted_y: bool) {
+    /// * `y_down` set true if the y axis increases downwards
+    pub fn draw(&self, simulation: &PhysicsSimulation, y_down: bool) {
         if let Some(body) = simulation.rigid_body_set.get(self.body) {
             let body_position = body.position();
             let body_translation = body_position.translation;
             let mut size = self.size;
-            let mut body_rotation = body_position.rotation.angle();
-            if inverted_y {body_rotation *= -1.0}
-            else {size *= vec2(1.0, -1.0)}
+            let body_rotation = body_position.rotation.angle();
+            if !y_down {size *= vec2(1.0, -1.0)}
             draw_texture_ex(
                 &self.texture,
                 body_translation.x - size.x * 0.5,
@@ -256,19 +254,18 @@ impl PhysicsSimulation {
         self.contact_force_reciever.clone()
     }
 
-    pub fn draw_debug(&self, color: Color, stroke: f32, y_down: bool) {
+    pub fn draw_debug(&self, color: Color, stroke: f32) {
         for (_, collider) in self.collider_set.iter() {
             let shape = collider.shape();
             let position = collider.position();
-            draw_shape(shape, position, color, stroke, y_down);
+            draw_shape(shape, position, color, stroke);
         }
     }
 }
 
-pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, stroke: f32, y_down: bool) {
-    let y_scale = if y_down { vec2(1.0, -1.0) } else { vec2(1.0, 1.0) };
+pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, stroke: f32) {
     let translation = position.translation;
-    let center = vec2(translation.x, y_scale.y * translation.y);
+    let center = vec2(translation.x, translation.y);
     let angle = position.rotation.angle();
     match shape.as_typed_shape() {
         TypedShape::Ball(ball) => {
@@ -280,9 +277,9 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
                 center.x,
                 center.y,
                 he.x * 2.0,
-                he.y * 2.0 * y_scale.y, stroke,
+                he.y * 2.0, stroke,
                 DrawRectangleParams {
-                    rotation: angle * y_scale.y,
+                    rotation: angle,
                     color,
                     offset: vec2(0.5, 0.5)
                 }
@@ -291,7 +288,7 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
         TypedShape::ConvexPolygon(polygon) => {
             let mut vertices: Vec<Vec2> = Vec::new();
             for point in polygon.points() {
-                vertices.push(y_scale * vec2(point.x, point.y).rotate(vec2(angle.cos(), angle.sin())));
+                vertices.push(vec2(point.x, point.y).rotate(vec2(angle.cos(), angle.sin())));
             }
             for i in 0..vertices.len() {
                 let point = center + vertices[i];
@@ -302,16 +299,16 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
         TypedShape::Compound(compound) => {
             let shapes = compound.shapes();
             for (isometry, shape) in shapes {
-                draw_shape(shape.as_ref(), &(isometry * position), color, stroke, y_down);
+                draw_shape(shape.as_ref(), &(isometry * position), color, stroke);
             }
         },
         _ => {
             let aabb = shape.compute_aabb(position);
             let r = Rect::new(
                 aabb.mins.x,
-                aabb.mins.y * y_scale.y,
+                aabb.mins.y,
                 aabb.half_extents().x * 2.0,
-                aabb.half_extents().y * 2.0 * y_scale.y);
+                aabb.half_extents().y * 2.0);
             draw_rectangle_lines(r.x, r.y, r.w, r.h, stroke, color);
         }
     }
