@@ -72,6 +72,7 @@ impl Truck {
             size: Vec2::splat(WHEEL_RADIUS * 2.0)
         };
 
+        // Frame
         let frame_builder =
             RigidBodyBuilder::new(RigidBodyType::Dynamic)
             .translation(to_physics_vector(location));

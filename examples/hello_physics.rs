@@ -16,7 +16,7 @@ async fn main() {
     let block = PhysicsSprite{
         texture: brick_texture,
         body: simulation.create_body(
-            &RigidBodyBuilder::dynamic().translation(to_physics_vector(vec2(350., 350.))),
+            &RigidBodyBuilder::dynamic().translation(to_physics_vector(vec2(350., 150.))),
             &vec![ColliderBuilder::cuboid(60., 60.)]),
         size: vec2(120., 120.)};
 

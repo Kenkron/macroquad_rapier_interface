@@ -11,76 +11,6 @@ pub fn to_physics_vector(source: Vec2) -> Vector<Real> {
     vector![source.x, source.y]
 }
 
-/// Utility structure that associates a texture with a rigid body
-///
-/// Designed to render such that camera units match physics units
-#[derive(Debug, Clone)]
-pub struct PhysicsSprite {
-    /// The appearance of the sprite, centered on the origin
-    pub texture: Texture2D,
-    /// The size of the sprite, irrespective of texture resolution
-    pub size: Vec2,
-    /// The physical body for this sprite
-    pub body: RigidBodyHandle
-}
-
-impl PhysicsSprite {
-    /// Draws self as a texture centered on the origin
-    ///
-    /// * `simulation` the physical world in which this object resides
-    /// * `y_down` set true if the y axis increases downwards
-    pub fn draw(&self, simulation: &PhysicsSimulation, y_down: bool) {
-        if let Some(body) = simulation.rigid_body_set.get(self.body) {
-            let body_position = body.position();
-            let body_translation = body_position.translation;
-            let mut size = self.size;
-            let body_rotation = body_position.rotation.angle();
-            if !y_down {size *= vec2(1.0, -1.0)}
-            draw_texture_ex(
-                &self.texture,
-                body_translation.x - size.x * 0.5,
-                body_translation.y - size.y * 0.5,
-                WHITE,
-                DrawTextureParams{
-                    rotation: body_rotation,
-                    dest_size: Some(size),
-                    .. Default::default()
-                });
-        }
-    }
-}
-
-/// Used to assign a collider to a group that only interacts with other
-/// objects within that group.
-///
-/// Colliders that haven't been assigned a group interact with everything
-/// because they are in all groups by default.
-pub fn isolate_physics_group(group: Group) -> InteractionGroups{
-    // A simple function, but I need it to keep from getting confused
-    return InteractionGroups::new(group, group);
-}
-
-/// Makes a polygonal collider from a slice of vectors
-///
-/// Vertices must be in clockwise order for a downwards y axis (macroquad's
-/// default camera), or counter-clockwise order for an upwards y axis
-/// The polygon will be approximated with concave shapes, but may not be
-/// exact.
-pub fn polygon_collider(polygon: &[Vec2]) -> ColliderBuilder {
-    let vertices: Vec<Point<Real>> = polygon.iter()
-        .map(|p| Point::new(p.x, p.y)).collect();
-    let indices: Vec<[u32; 2]> = (0..vertices.len() as u32)
-        .map(|i| [i, (i + 1) % vertices.len() as u32 ]).collect();
-    ColliderBuilder::convex_decomposition_with_params(
-        &vertices,
-        &indices,
-        &VHACDParameters {
-            concavity: 0.01,
-            ..Default::default()
-        }
-    )
-}
-
 /// State of physics simulation
 pub struct PhysicsSimulation {
     pub gravity: Vector<Real>,
@@ -218,9 +148,13 @@ impl PhysicsSimulation {
             .collect()
     }
 
-    pub fn teleport(&mut self, body: RigidBodyHandle, location: &Vec2) {
+    /// Move a rigid body to a new location and rotation.
+    ///
+    /// Does not affect bodies attached by joints.
+    pub fn teleport(&mut self, body: RigidBodyHandle, location: &Vec2, angle: f32) {
         if let Some(body) = self.rigid_body_set.get_mut(body) {
-            body.set_position(Isometry::translation(location.x, location.y), true);
+            body.set_position(Isometry::translation(location.x, location.y), false);
+            body.set_rotation(Rotation::from_angle(angle), true);
         }
     }
 
@@ -246,6 +180,7 @@ impl PhysicsSimulation {
         self.query_pipeline.update(&self.collider_set);
     }
 
+    /// Recieve broadcasts when a collision occurs
     pub fn make_collision_reciever(&self) -> channel::Receiver<CollisionEvent> {
         self.collision_reciever.clone()
     }
@@ -254,6 +189,9 @@ impl PhysicsSimulation {
         self.contact_force_reciever.clone()
     }
 
+    /// Draw the colliders of the simulation onto camera space
+    ///
+    /// This will match physics space to camera space.
     pub fn draw_debug(&self, color: Color, stroke: f32) {
         for (_, collider) in self.collider_set.iter() {
             let shape = collider.shape();
@@ -263,6 +201,46 @@ impl PhysicsSimulation {
     }
 }
 
+/// Utility structure that associates a texture with a rigid body
+///
+/// Designed to render such that camera units match physics units
+#[derive(Debug, Clone)]
+pub struct PhysicsSprite {
+    /// The appearance of the sprite, centered on the origin
+    pub texture: Texture2D,
+    /// The size of the sprite, irrespective of texture resolution
+    pub size: Vec2,
+    /// The physical body for this sprite
+    pub body: RigidBodyHandle
+}
+
+impl PhysicsSprite {
+    /// Draws self as a texture centered on the origin
+    ///
+    /// * `simulation` the physical world in which this object resides
+    /// * `y_down` set true if the y axis increases downwards
+    pub fn draw(&self, simulation: &PhysicsSimulation, y_down: bool) {
+        if let Some(body) = simulation.rigid_body_set.get(self.body) {
+            let body_position = body.position();
+            let body_translation = body_position.translation;
+            let mut size = self.size;
+            let body_rotation = body_position.rotation.angle();
+            if !y_down {size *= vec2(1.0, -1.0)}
+            draw_texture_ex(
+                &self.texture,
+                body_translation.x - size.x * 0.5,
+                body_translation.y - size.y * 0.5,
+                WHITE,
+                DrawTextureParams{
+                    rotation: body_rotation,
+                    dest_size: Some(size),
+                    .. Default::default()
+                });
+        }
+    }
+}
+
+/// Draws a shape based on data obtained from a collider
 pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, stroke: f32) {
     let translation = position.translation;
     let center = vec2(translation.x, translation.y);
@@ -312,4 +290,35 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
             draw_rectangle_lines(r.x, r.y, r.w, r.h, stroke, color);
         }
     }
+}
+
+/// Used to assign a collider to a group that only interacts with other
+/// objects within that group.
+///
+/// Colliders that haven't been assigned a group interact with everything
+/// because they are in all groups by default.
+pub fn isolate_physics_group(group: Group) -> InteractionGroups{
+    // A simple function, but I need it to keep from getting confused
+    return InteractionGroups::new(group, group);
+}
+
+/// Makes a polygonal collider from a slice of vectors
+///
+/// Vertices must be in clockwise order for a downwards y axis (macroquad's
+/// default camera), or counter-clockwise order for an upwards y axis
+/// The polygon will be approximated with concave shapes, but may not be
+/// exact.
+pub fn polygon_collider(polygon: &[Vec2]) -> ColliderBuilder {
+    let vertices: Vec<Point<Real>> = polygon.iter()
+        .map(|p| Point::new(p.x, p.y)).collect();
+    let indices: Vec<[u32; 2]> = (0..vertices.len() as u32)
+        .map(|i| [i, (i + 1) % vertices.len() as u32 ]).collect();
+    ColliderBuilder::convex_decomposition_with_params(
+        &vertices,
+        &indices,
+        &VHACDParameters {
+            concavity: 0.01,
+            ..Default::default()
+        }
+    )
 }
