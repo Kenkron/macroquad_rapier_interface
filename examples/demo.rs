@@ -52,7 +52,7 @@ async fn main() {
         if is_key_pressed(KeyCode::I) { debug = !debug }
 
         //////// Simulate ///////
-        simulation.step(get_frame_time());
+        simulation.step(get_frame_time().min(0.05));
 
         //////// Render ////////
         clear_background(LIGHTGRAY);

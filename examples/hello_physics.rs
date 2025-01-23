@@ -9,7 +9,7 @@ async fn main() {
     let mut simulation = PhysicsSimulation::new(vec2(0.0, 980.0));
 
     // Add sloped floor
-    let shape = vec![vec2(0., 400.), vec2(800., 500.), vec2(800., 600.), vec2(0., 600.)];
+    let shape = vec![(0., 400.), (800., 500.), (800., 600.), (0., 600.)];
     simulation.create_body(&RigidBodyBuilder::fixed(), &vec![polygon_collider(&shape)]);
 
     // Make block
@@ -22,7 +22,7 @@ async fn main() {
 
     // Game loop
     loop {
-        simulation.step(get_frame_time());
+        simulation.step(get_frame_time().min(0.05));
 
         clear_background(LIGHTGRAY);
         block.draw(&simulation, true);

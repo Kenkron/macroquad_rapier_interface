@@ -302,15 +302,18 @@ pub fn isolate_physics_group(group: Group) -> InteractionGroups{
     return InteractionGroups::new(group, group);
 }
 
-/// Makes a polygonal collider from a slice of vectors
+/// Makes a polygonal collider from a slice of vertices
 ///
 /// Vertices must be in clockwise order for a downwards y axis (macroquad's
 /// default camera), or counter-clockwise order for an upwards y axis
 /// The polygon will be approximated with concave shapes, but may not be
 /// exact.
-pub fn polygon_collider(polygon: &[Vec2]) -> ColliderBuilder {
+pub fn polygon_collider<T: Clone + Into<[f32; 2]>>(polygon: &[T]) -> ColliderBuilder {
     let vertices: Vec<Point<Real>> = polygon.iter()
-        .map(|p| Point::new(p.x, p.y)).collect();
+        .map(|p| {
+            let c: [f32; 2] = p.to_owned().into();
+            Point::new(c[0], c[1])
+        }).collect();
     let indices: Vec<[u32; 2]> = (0..vertices.len() as u32)
         .map(|i| [i, (i + 1) % vertices.len() as u32 ]).collect();
     ColliderBuilder::convex_decomposition_with_params(
