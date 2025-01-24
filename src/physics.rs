@@ -83,18 +83,6 @@ impl PhysicsSimulation {
             true);
     }
 
-    /// Creates a rotating joint between two bodies
-    ///
-    /// Hardly does anything, but it makes my code cleaner
-    pub fn create_joint(
-        &mut self,
-        properties: &RevoluteJointBuilder,
-        body1: RigidBodyHandle,
-        body2: RigidBodyHandle)
-    -> ImpulseJointHandle {
-        return self.impulse_joint_set.insert(body1, body2, properties.build(), true);
-    }
-
     /// Configures a rotating motor on a rotating joint
     pub fn set_motor(
         &mut self,
@@ -181,18 +169,18 @@ impl PhysicsSimulation {
     }
 
     /// Recieve broadcasts when a collision occurs
-    pub fn make_collision_reciever(&self) -> channel::Receiver<CollisionEvent> {
+    pub fn create_collision_reciever(&self) -> channel::Receiver<CollisionEvent> {
         self.collision_reciever.clone()
     }
 
-    pub fn make_contact_force_reciever(&self) -> channel::Receiver<ContactForceEvent> {
+    pub fn create_contact_force_reciever(&self) -> channel::Receiver<ContactForceEvent> {
         self.contact_force_reciever.clone()
     }
 
     /// Draw the colliders of the simulation onto camera space
     ///
     /// This will match physics space to camera space.
-    pub fn draw_debug(&self, color: Color, stroke: f32) {
+    pub fn draw_colliders(&self, color: Color, stroke: f32) {
         for (_, collider) in self.collider_set.iter() {
             let shape = collider.shape();
             let position = collider.position();
@@ -219,13 +207,13 @@ impl PhysicsSprite {
     ///
     /// * `simulation` the physical world in which this object resides
     /// * `y_down` set true if the y axis increases downwards
-    pub fn draw(&self, simulation: &PhysicsSimulation, y_down: bool) {
+    pub fn draw(&self, simulation: &PhysicsSimulation, y_up: bool) {
         if let Some(body) = simulation.rigid_body_set.get(self.body) {
             let body_position = body.position();
             let body_translation = body_position.translation;
             let mut size = self.size;
             let body_rotation = body_position.rotation.angle();
-            if !y_down {size *= vec2(1.0, -1.0)}
+            if y_up {size *= vec2(1.0, -1.0)}
             draw_texture_ex(
                 &self.texture,
                 body_translation.x - size.x * 0.5,

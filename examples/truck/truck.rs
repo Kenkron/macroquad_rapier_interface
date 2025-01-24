@@ -50,6 +50,7 @@ impl Truck {
         let wheel_colliders = vec![
             ColliderBuilder::ball(WHEEL_RADIUS)
                 .friction(2.0)
+                .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
         ];
 
         // Rear wheel
@@ -79,10 +80,11 @@ impl Truck {
         let frame = load_svg_physics_sprite(
             simulation,
             &frame_builder,
-            &ColliderBuilder::default(),
+            &ColliderBuilder::default()
+                .active_events(ActiveEvents::CONTACT_FORCE_EVENTS),
             include_str!("../../assets/truck_frame.svg"),
             vec2(6.0, 1.5),
-            false).unwrap();
+            true).unwrap();
 
         // Make front wheel drive
         let joint = suspension()
@@ -123,8 +125,8 @@ impl Truck {
     }
 
     pub fn draw(&self, simulation: &PhysicsSimulation) {
-        self.frame.draw(simulation, false);
-        self.front_wheel.draw(simulation, false);
-        self.rear_wheel.draw(simulation, false);
+        self.frame.draw(simulation, true);
+        self.front_wheel.draw(simulation, true);
+        self.rear_wheel.draw(simulation, true);
     }
 }

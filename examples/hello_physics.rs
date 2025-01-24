@@ -9,14 +9,14 @@ async fn main() {
     let mut simulation = PhysicsSimulation::new(vec2(0.0, 980.0));
 
     // Add sloped floor
-    let shape = vec![(0., 400.), (800., 500.), (800., 600.), (0., 600.)];
-    simulation.create_body(&RigidBodyBuilder::fixed(), &vec![polygon_collider(&shape)]);
+    let shape = vec![[0., 400.], [800., 500.], [800., 600.], [0., 600.]];
+    simulation.create_body(&RigidBodyBuilder::fixed(), &[polygon_collider(&shape)]);
 
     // Make block
     let block = PhysicsSprite{
         texture: brick_texture,
         body: simulation.create_body(
-            &RigidBodyBuilder::dynamic().translation(to_physics_vector(vec2(350., 150.))),
+            &RigidBodyBuilder::dynamic().translation([350., 150.].into()),
             &vec![ColliderBuilder::cuboid(60., 60.)]),
         size: vec2(120., 120.)};
 
@@ -26,7 +26,7 @@ async fn main() {
 
         clear_background(LIGHTGRAY);
         block.draw(&simulation, true);
-        simulation.draw_debug(GREEN, 2.0);
+        simulation.draw_colliders(GREEN, 2.0);
 
         next_frame().await
     }

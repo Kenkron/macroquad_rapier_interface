@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use macroquad::prelude::*;
+use macroquad::{audio::{load_sound, play_sound_once, set_sound_volume}, prelude::*};
 use rapier2d::prelude::*;
 extern crate macroquad_rapier_interface as physics;
 use physics::*;
@@ -12,7 +12,9 @@ fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dy
         RigidBodyBuilder::new(body_type)
         .translation(vector![rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]);
     let collider_builders = vec![
-        ColliderBuilder::cuboid(rect.w * 0.5, rect.h * 0.5).friction(0.75)
+        ColliderBuilder::cuboid(rect.w * 0.5, rect.h * 0.5)
+            .friction(0.75)
+            .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
     ];
     return PhysicsSprite{
         texture: texture.clone(),
@@ -29,6 +31,7 @@ fn make_ball(physics: &mut PhysicsSimulation, texture: &Texture2D, circle: Circl
         ColliderBuilder::ball(circle.radius())
             .friction(2.0)
             .density(2.0)
+            .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
     ];
     return PhysicsSprite{
         texture: texture.clone(),
@@ -50,14 +53,11 @@ impl GameState {
         let truck = truck::Truck::new(&mut simulation, vec2(0.0, 0.0)).await;
         let mut sprites: HashMap<RigidBodyHandle, PhysicsSprite> = HashMap::new();
         // make floor
-        for i in 0..32 {
-            let floor_box = make_box(
-                &mut simulation,
-                &brick_texture,
-                Rect { x: i as f32 - 16.0, y: -9.0, w: 1.0, h: 1.0 },
-                false);
-            sprites.insert(floor_box.body, floor_box);
-        }
+        simulation.create_body(
+            &RigidBodyBuilder::fixed()
+                .translation([0.0, -10.0].into()),
+            &[ColliderBuilder::cuboid(16.0, 1.0)
+            .friction(0.75)]);
         // make walls
         for i in 0..18 {
             let left_wall = make_box(
@@ -82,7 +82,7 @@ impl GameState {
     }
     pub fn draw(&self) {
         for (_, sprite) in &self.sprites {
-            sprite.draw(&self.simulation, false);
+            sprite.draw(&self.simulation, true);
         }
         self.truck.draw(&self.simulation);
     }
@@ -100,7 +100,10 @@ fn window_conf() -> Conf {
 async fn main() {
     let ball_texture = load_texture("assets/tire.png").await.unwrap();
     let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
+    let collision_sound = load_sound("assets/collision.wav").await.unwrap();
     let mut game_state = GameState::new().await;
+    let collision_reciever = game_state.simulation.create_contact_force_reciever();
+    let mut already_touching: HashSet<ColliderPair> = HashSet::new();
     let mut debug = false;
     loop {
         clear_background(LIGHTGRAY);
@@ -116,6 +119,23 @@ async fn main() {
         // Update and render
         game_state.update();
         game_state.draw();
+
+        // Play audio for collisions
+        let mut touching: HashSet<ColliderPair> = HashSet::new();
+        while let Ok(collision_event) = collision_reciever.try_recv() {
+            let pair = ColliderPair::new(collision_event.collider1, collision_event.collider2);
+            touching.insert(pair);
+            // Handle the collision event.
+            if collision_event.max_force_magnitude > 100.0 &&
+                !already_touching.contains(&pair) &&
+                !already_touching.contains(&pair.swap()) &&
+                get_frame_time() > 0.0 {
+                let impulse = collision_event.max_force_magnitude / get_frame_time();
+                play_sound_once(&collision_sound);
+                set_sound_volume(&collision_sound, 1.0_f32.min(impulse/1000000.0));
+            }
+        }
+        already_touching = touching;
 
         // Left click to add sprites
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -153,7 +173,7 @@ async fn main() {
             debug = !debug;
         }
         if debug {
-            game_state.simulation.draw_debug(GREEN, 0.0625);
+            game_state.simulation.draw_colliders(GREEN, 0.0625);
         }
 
         // Reset to the default camera for the HUD

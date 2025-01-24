@@ -28,12 +28,12 @@ pub fn load_svg_physics_sprite(
     collider_properties: &ColliderBuilder,
     svg: &str,
     size: Vec2,
-    y_down: bool)
+    y_up: bool)
 -> Option<PhysicsSprite> {
     let canvas_size = load_svg_canvas_size(svg).unwrap_or(size);
     let texture = load_svg_texture(svg)?;
     let mut paths =
-        load_physics_paths(svg, size / 2.0, size / canvas_size, 8, y_down);
+        load_physics_paths(svg, size / 2.0, size / canvas_size, 8, y_up);
     // Give the colliders the correct properties
     paths = paths.iter().map(|shaped_collider| {
         let mut result = collider_properties.clone();
@@ -53,8 +53,8 @@ pub fn load_svg_physics_sprite(
 ///
 /// This function will load svg data and make colliders out of any paths
 /// it finds.
-pub fn load_physics_paths(svg: &str, mut center: Vec2, mut scale: Vec2, curve_segments: i32, y_down: bool) -> Vec<ColliderBuilder> {
-    if !y_down {
+pub fn load_physics_paths(svg: &str, mut center: Vec2, mut scale: Vec2, curve_segments: i32, y_up: bool) -> Vec<ColliderBuilder> {
+    if y_up {
         scale.y *= -1.0;
         center.y *= -1.0;
     }

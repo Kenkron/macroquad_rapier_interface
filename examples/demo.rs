@@ -19,7 +19,7 @@ async fn main() {
             texture: brick_texture.clone(),
             size: vec2(8.0, 1.0),
             body: simulation.create_body(
-                &RigidBodyBuilder::fixed().translation(to_physics_vector(vec2(4.0, -0.5))),
+                &RigidBodyBuilder::fixed().translation([4.0, -0.5].into()),
                 &vec![ColliderBuilder::cuboid(4.0, 0.5)]
             )});
 
@@ -58,10 +58,10 @@ async fn main() {
         clear_background(LIGHTGRAY);
         set_camera(&physics_camera);
         for sprite in &sprites {
-            sprite.draw(&simulation, false);
+            sprite.draw(&simulation, true);
         }
         if debug {
-            simulation.draw_debug(GREEN, 0.0625);
+            simulation.draw_colliders(GREEN, 0.0625);
         }
 
         // Reset to the default camera for the HUD
