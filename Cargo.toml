@@ -4,7 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-base64 = "0.22.1"
-macroquad = {version = "0.4.13", features = ["audio"]}
+base64 = {version = "0.22.1", optional = true}
+macroquad = "0.4.13"
 rapier2d = "0.23.0"
-xml-rs = "0.8.25"
+xml-rs = {version = "0.8.25", optional = true}
+
+[dev-dependencies]
+macroquad = {version = "0.4.13", features = ["audio"]}
+
+[features]
+svg = ["dep:xml-rs", "dep:base64"]
+
+[[example]]
+name = "truck"
+required-features = ["svg"]
