@@ -98,8 +98,7 @@ pub fn load_path(name: &OwnedName, attributes: &[OwnedAttribute], center: Vec2, 
 
 /// Converts the data property of an svg path to a Vec2 list.
 ///
-/// Bezier curves are interpolated to have 8 segments.
-/// Arcs are not supported, and are replaced with straight lines.
+/// Arcs are not supported, and are omitted.
 pub fn parse_path_data(data: &str, curve_segments: i32) -> Option<Vec<Vec2>> {
     let mut tokens = data.split_ascii_whitespace().into_iter();
     let mut previous_control = Option::<Vec2>::None;
@@ -157,7 +156,7 @@ pub fn parse_path_data(data: &str, curve_segments: i32) -> Option<Vec<Vec2>> {
                     Some(form_bezier(curve_segments, origin, &mut result, previous_control, 1, token, &mut tokens)?);
             },
             "a" => {
-                eprintln!("Arcs are not supported. Replacing with line")
+                eprintln!("Arcs are not supported. Omitting")
             },
             "z" => { break; },
             _ => {}
@@ -166,6 +165,11 @@ pub fn parse_path_data(data: &str, curve_segments: i32) -> Option<Vec<Vec2>> {
     Some(result)
 }
 
+/// Get a point along a bezier curve
+///
+/// - `controls` The control points of the curve
+/// - `fraction` The position along the curve to sample, ranging from
+///   0.0 representing the start, to 1.0 representing the end.
 pub fn interpolate_bezier(controls: &[Vec2], fraction: f32) -> Vec2 {
     if controls.len() == 0 {
         return vec2(0.0, 0.0);
@@ -174,7 +178,7 @@ pub fn interpolate_bezier(controls: &[Vec2], fraction: f32) -> Vec2 {
         return controls[0];
     }
     if controls.len() == 2 {
-        return controls[0] * fraction + controls[1] * (1.0 - fraction);
+        return controls[0] * (1.0 - fraction) + controls[1] * fraction;
     }
     return interpolate_bezier(&[
         interpolate_bezier(&controls[0..controls.len()-1], fraction),
@@ -187,6 +191,7 @@ fn get_vec(text: &str) -> Option<Vec2>{
     Some(vec2(coords.get(0)?.parse().ok()?, coords.get(1)?.parse().ok()?))
 }
 
+/// Helper function to read a bezier curve into a list of points
 fn form_bezier(
     bezier_segments: i32,
     origin: Vec2,
@@ -198,17 +203,18 @@ fn form_bezier(
 -> Option<Vec2> {
     let mut controls = vec![*dest.last()?];
     if let Some(previous_control) = previous_control {
-        controls.push(*dest.last()? * 2.0 - previous_control)
+        controls.push(*dest.last()? * 2.0 - previous_control);
     }
     controls.push(origin + get_vec(token)?);
     for _ in 0..read_count {
         controls.push(origin + get_vec(tokens.next()?)?);
     }
-    let persistent_control = Some(controls[read_count - 2]);
+    let persistent_control = controls.get(read_count - 2).copied();
     for i in 0..bezier_segments {
-        dest.push(interpolate_bezier(
+        let interpolation = interpolate_bezier(
             &controls,
-            (i + 1) as f32 * (1.0 / bezier_segments as f32)));
+            (i + 1) as f32 / bezier_segments as f32);
+        dest.push(interpolation);
     }
     persistent_control
 }
@@ -253,7 +259,7 @@ pub fn load_image_tag(name: &OwnedName, attributes: &[OwnedAttribute]) -> Option
             continue;
         }
         let data = image_values[1].trim()
-            .split(' ')
+            .split_ascii_whitespace()
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
             .join("");

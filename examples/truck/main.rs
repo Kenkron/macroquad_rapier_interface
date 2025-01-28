@@ -1,9 +1,11 @@
+use core::f32;
 use std::collections::{HashMap, HashSet};
 
 use macroquad::{audio::{load_sound, play_sound_once, set_sound_volume}, prelude::*};
 use rapier2d::prelude::*;
 extern crate macroquad_rapier_interface as physics;
 use physics::*;
+use svg::load_svg_physics_sprite;
 mod truck;
 
 fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dynamic: bool) -> PhysicsSprite {
@@ -74,6 +76,15 @@ impl GameState {
                     false);
             sprites.insert(right_wall.body, right_wall);
         }
+        // make arch
+        let arch = load_svg_physics_sprite(
+            &mut simulation,
+            &RigidBodyBuilder::dynamic().translation([5.0,0.0].into()).rotation(f32::consts::PI),
+            &ColliderBuilder::default(),
+            include_str!("../../assets/arch.svg"),
+            vec2(2.0, 1.0),
+            true).unwrap();
+        sprites.insert(arch.body, arch);
         Self { simulation, sprites, truck }
     }
     pub fn update(&mut self) {
