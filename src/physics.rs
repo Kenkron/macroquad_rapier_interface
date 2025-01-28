@@ -67,7 +67,7 @@ impl PhysicsSimulation {
                     &mut self.rigid_body_set);
             collider_handles.push(handle);
         }
-        return body_handle;
+        body_handle
     }
 
     /// Removes a body from the simulation
@@ -127,8 +127,8 @@ impl PhysicsSimulation {
             query_filter,
             |collider| {
                 intersections.push(collider);
-                // Return true to break early
-                return false;
+                // Return true would break early
+                false
             });
         intersections.iter()
             .filter_map(|collider_handle| self.collider_set.get(*collider_handle))
@@ -278,16 +278,6 @@ pub fn draw_shape(shape: &dyn Shape, position: &Isometry<f32>, color: Color, str
             draw_rectangle_lines(r.x, r.y, r.w, r.h, stroke, color);
         }
     }
-}
-
-/// Used to assign a collider to a group that only interacts with other
-/// objects within that group.
-///
-/// Colliders that haven't been assigned a group interact with everything
-/// because they are in all groups by default.
-pub fn isolate_physics_group(group: Group) -> InteractionGroups{
-    // A simple function, but I need it to keep from getting confused
-    return InteractionGroups::new(group, group);
 }
 
 /// Makes a polygonal collider from a slice of vertices
