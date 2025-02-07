@@ -6,7 +6,29 @@ use rapier2d::prelude::*;
 use xml::{attribute::OwnedAttribute, name::OwnedName, reader::{EventReader, XmlEvent}};
 use crate::physics::*;
 
-/// Loads a [PhysicsSprite] from an svg with an embedded image covering
+/// A structure for building a physics sprite
+///
+/// Allows multiple physics sprites to be built without reloading the texture
+/// and colliders.
+pub struct PhysicsSpriteBuilder {
+    texture: Texture2D,
+    size: Vec2,
+    colliders: Vec<ColliderBuilder>
+}
+
+impl PhysicsSpriteBuilder {
+    /// Builds a physics sprite and inserts it into a simulation
+    pub fn build(&self, simulation: &mut PhysicsSimulation, body: &RigidBodyBuilder)
+    -> PhysicsSprite {
+        PhysicsSprite {
+            body: simulation.create_body(body, &self.colliders),
+            texture: self.texture.clone(),
+            size: self.size
+        }
+    }
+}
+
+/// Loads a [PhysicsSpriteBuilder] from an svg with an embedded image covering
 /// the canvas representing the appearance, and any paths representing
 /// physical shape.
 ///
@@ -23,28 +45,22 @@ use crate::physics::*;
 ///   sprite. The shape for this collider is ignored, and can be anything,
 ///   i.e. `ColliderBuilder.default()`.
 pub fn load_svg_physics_sprite(
-    simulation: &mut PhysicsSimulation,
-    body_builder: &RigidBodyBuilder,
     collider_properties: &ColliderBuilder,
     svg: &str,
     size: Vec2,
     y_up: bool)
--> Option<PhysicsSprite> {
+-> Option<PhysicsSpriteBuilder> {
     let canvas_size = load_svg_canvas_size(svg).unwrap_or(size);
     let texture = load_svg_texture(svg)?;
-    let mut paths =
+    let paths =
         load_physics_paths(svg, size / 2.0, size / canvas_size, 8, y_up);
     // Give the colliders the correct properties
-    paths = paths.iter().map(|shaped_collider| {
+    let colliders = paths.iter().map(|shaped_collider| {
         let mut result = collider_properties.clone();
         result.shape = shaped_collider.shape.clone();
         result
     }).collect();
-    Some(PhysicsSprite {
-        body: simulation.create_body(body_builder, &paths),
-        texture,
-        size
-    })
+    Some(PhysicsSpriteBuilder { colliders, texture, size })
 }
 
 /// An easy way to create a shaped physics object is to open an image

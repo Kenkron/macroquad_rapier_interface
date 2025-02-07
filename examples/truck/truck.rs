@@ -74,17 +74,18 @@ impl Truck {
         };
 
         // Frame
-        let frame_builder =
+        let frame_body =
             RigidBodyBuilder::new(RigidBodyType::Dynamic)
             .translation(to_physics_vector(location));
-        let frame = load_svg_physics_sprite(
-            simulation,
-            &frame_builder,
+        let frame_builder = load_svg_physics_sprite(
             &ColliderBuilder::default()
                 .active_events(ActiveEvents::CONTACT_FORCE_EVENTS),
             include_str!("../../assets/truck_frame.svg"),
             vec2(6.0, 1.5),
             true).unwrap();
+        let frame = frame_builder.build(
+            simulation,
+            &frame_body);
 
         // Make front wheel drive
         let joint = suspension()

@@ -77,13 +77,16 @@ impl GameState {
             sprites.insert(right_wall.body, right_wall);
         }
         // make arch
-        let arch = load_svg_physics_sprite(
-            &mut simulation,
-            &RigidBodyBuilder::dynamic().translation([5.0,0.0].into()).rotation(f32::consts::PI),
+        let arch_builder = load_svg_physics_sprite(
             &ColliderBuilder::default(),
             include_str!("../../assets/arch.svg"),
             vec2(2.0, 1.0),
             true).unwrap();
+        let arch = arch_builder.build(
+            &mut simulation,
+            &RigidBodyBuilder::dynamic()
+                .translation([5.0,0.0].into())
+                .rotation(f32::consts::PI));
         sprites.insert(arch.body, arch);
         Self { simulation, sprites, truck }
     }

@@ -109,3 +109,43 @@ Breakdown
   a given color and line weight. Physics coordinates will match camera
   coordinates, so `macroquad::camera::set_camera(...)` can be used to specify
   the region of the physics world that should apper on screen.
+
+SVG
+===
+
+Optional feature for storing a rasterized image and a path for a physics
+outline in an svg. This makes it easy to open a sprite in inkscape, draw an
+outline for it, then save the result to an svg file that can be imported
+directly.
+
+The truck example makes use of this with `assets/arch.svg`. Note that, while
+bezier curves are supported, arches are not.
+
+Example
+-------
+
+```
+let arch_builder = load_svg_physics_sprite(
+    &ColliderBuilder::default(),
+    include_str!("../../assets/arch.svg"),
+    vec2(2.0, 1.0),
+    true).unwrap();
+let arch = arch_builder.build(
+    &mut simulation,
+    &RigidBodyBuilder::dynamic()
+      .translation([5.0,0.0].into())
+      .rotation(f32::consts::PI));
+```
+
+### Breakdown
+
+* `load_svg_physics_sprite` Loads the texture and shape of the object.
+  * `&ColliderBuilder::default(),` The physical properties of this collider
+    will be applied to the colliders from the SVG.
+  * `include_str!("../../assets/arch.svg"),` The SVG, passed in as a string.
+  * `vec2(2.0, 1.0),` The size of the svg canvas in physics dimensions.
+  * `true` Indicates the coordinates should be flipped so the y axis is up
+    (because, in this case, the camera has its y axis up.)
+* `arch_builder.build` Creates a new physics body based on the provided
+  RigidBodyBuilder. This can be used repeatedly to create multiple bodies
+  without reloadind the svg and its embedded texture.
