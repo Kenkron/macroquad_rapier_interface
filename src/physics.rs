@@ -26,6 +26,8 @@ pub struct PhysicsSimulation {
     pub ccd_solver: CCDSolver,
     pub event_handler: ChannelEventCollector,
     pub query_pipeline: QueryPipeline,
+    pub collision_channels: Vec<channel::Sender<CollisionEvent>>,
+    pub contact_force_channels: Vec<channel::Sender<ContactForceEvent>>,
     collision_reciever: channel::Receiver<CollisionEvent>,
     contact_force_reciever: channel::Receiver<ContactForceEvent>
 }
@@ -50,6 +52,8 @@ impl PhysicsSimulation {
             ccd_solver: CCDSolver::new(),
             event_handler,
             query_pipeline: QueryPipeline::new(),
+            collision_channels: Vec::new(),
+            contact_force_channels: Vec::new(),
             collision_reciever: collision_recv,
             contact_force_reciever: contact_force_recv
         }
@@ -166,15 +170,38 @@ impl PhysicsSimulation {
             &self.event_handler,
           );
         self.query_pipeline.update(&self.collider_set);
+
+        // Broadcast events
+        while let Ok(collision_event) = self.collision_reciever.try_recv() {
+            for collision_channel in &self.collision_channels {
+                match collision_channel.send(collision_event) {
+                    Ok(_) => {},
+                    Err(_) => {eprintln!("PhysicsSimulation::step() Could not send collision event to a channel")}
+                }
+            }
+        }
+        while let Ok(contact_force_event) = self.contact_force_reciever.try_recv() {
+            for contact_force_channel in &self.contact_force_channels {
+                match contact_force_channel.send(contact_force_event) {
+                    Ok(_) => {},
+                    Err(_) => {eprintln!("PhysicsSimulation::step() Could not send contact force event to a channel")}
+                }
+            }
+        }
     }
 
     /// Recieve broadcasts when a collision occurs
-    pub fn create_collision_reciever(&self) -> channel::Receiver<CollisionEvent> {
-        self.collision_reciever.clone()
+    pub fn create_collision_reciever(&mut self) -> channel::Receiver<CollisionEvent> {
+        let (collision_send, collision_recv) = channel::unbounded();
+        self.collision_channels.push(collision_send);
+        collision_recv
     }
 
-    pub fn create_contact_force_reciever(&self) -> channel::Receiver<ContactForceEvent> {
-        self.contact_force_reciever.clone()
+    /// Recieve a message when a contact force occurs
+    pub fn create_contact_force_reciever(&mut self) -> channel::Receiver<ContactForceEvent> {
+        let (contact_send, contact_recv) = channel::unbounded();
+        self.contact_force_channels.push(contact_send);
+        contact_recv
     }
 
     /// Draw the colliders of the simulation onto camera space
