@@ -10,6 +10,8 @@ async fn main() {
     let mut debug = true;
     let mut simulation = PhysicsSimulation::new(vec2(0.0, -9.8));
     let mut sprites: Vec<PhysicsSprite> = vec![];
+    let mut elevators: Vec<PhysicsSprite> = vec![];
+
     // Scale camera to world coordinates (8x6 with the y axis up)
     let physics_camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, 8.0, 6.0));
 
@@ -22,6 +24,21 @@ async fn main() {
                 &RigidBodyBuilder::fixed().translation([4.0, -0.5].into()),
                 &vec![ColliderBuilder::cuboid(4.0, 0.5)]
             )});
+
+    // Add elevators
+    elevators.push(
+        PhysicsSprite {
+            texture: brick_texture.clone(),
+            size: vec2(1.0, 1.0),
+            body: simulation.create_body(
+                &RigidBodyBuilder::kinematic_velocity_based().translation([7.0, -0.5].into()),
+                &vec![ColliderBuilder::cuboid(0.5, 0.5)]
+        )});
+    for elevator in &elevators {
+        if let Some(elevator) = simulation.rigid_body_set.get_mut(elevator.body) {
+            elevator.set_linvel([0.0, 1.0].into(), true);
+        }
+    }
 
     loop {
         //////// Input ////////
@@ -53,15 +70,25 @@ async fn main() {
 
         //////// Simulate ///////
         simulation.step(get_frame_time().min(0.05));
+        for elevator in &elevators {
+            if let Some (body) = simulation.rigid_body_set.get_mut(elevator.body) {
+                let mut translation = body.position().translation;
+                if translation.y > 7.0 {translation.y = -1.0}
+                body.set_translation([translation.x, translation.y].into(), true);
+            }
+        }
 
         //////// Render ////////
         clear_background(LIGHTGRAY);
         set_camera(&physics_camera);
+        for elevator in &elevators {
+            elevator.draw(&simulation, true);
+        }
         for sprite in &sprites {
             sprite.draw(&simulation, true);
         }
         if debug {
-            simulation.draw_colliders(GREEN, 0.0625);
+            simulation.draw_colliders(GREEN, 0.03125);
         }
 
         // Reset to the default camera for the HUD

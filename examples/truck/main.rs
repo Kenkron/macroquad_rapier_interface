@@ -90,9 +90,10 @@ impl GameState {
         sprites.insert(arch.body, arch);
         Self { simulation, sprites, truck }
     }
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> Vec<ContactForceEvent>{
         self.truck.update(&mut self.simulation);
-        self.simulation.step(get_frame_time().min(1.0/20.0));
+        let (_, contact_force_events) = self.simulation.step(get_frame_time().min(1.0/20.0));
+        contact_force_events
     }
     pub fn draw(&self) {
         for (_, sprite) in &self.sprites {
@@ -116,7 +117,6 @@ async fn main() {
     let brick_texture = load_texture("assets/brick_texture.png").await.unwrap();
     let collision_sound = load_sound("assets/collision.wav").await.unwrap();
     let mut game_state = GameState::new().await;
-    let collision_reciever = game_state.simulation.create_contact_force_reciever();
     let mut already_touching: HashSet<ColliderPair> = HashSet::new();
     let mut debug = false;
     loop {
@@ -131,12 +131,12 @@ async fn main() {
         set_camera(&camera);
 
         // Update and render
-        game_state.update();
+        let contact_force_events = game_state.update();
         game_state.draw();
 
         // Play audio for collisions
         let mut touching: HashSet<ColliderPair> = HashSet::new();
-        while let Ok(collision_event) = collision_reciever.try_recv() {
+        for collision_event in contact_force_events {
             let pair = ColliderPair::new(collision_event.collider1, collision_event.collider2);
             touching.insert(pair);
             // Handle the collision event.
