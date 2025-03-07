@@ -1,4 +1,5 @@
 use macroquad::prelude::*;
+use rapier2d::na::UnitVector2;
 use rapier2d::parry::transformation::vhacd::VHACDParameters;
 use rapier2d::prelude::*;
 use rapier2d::crossbeam::channel;
@@ -13,6 +14,7 @@ pub fn to_physics_vector(source: Vec2) -> Vector<Real> {
 
 /// State of physics simulation
 pub struct PhysicsSimulation {
+    // Needed for step function
     pub gravity: Vector<Real>,
     pub rigid_body_set: RigidBodySet,
     pub collider_set: ColliderSet,
@@ -25,7 +27,10 @@ pub struct PhysicsSimulation {
     pub multibody_joint_set: MultibodyJointSet,
     pub ccd_solver: CCDSolver,
     pub event_handler: ChannelEventCollector,
+    // Check for non-simulation intersections
     pub query_pipeline: QueryPipeline,
+    // Anchor for friction
+    pub friction_anchor: RigidBodyHandle,
     collision_reciever: channel::Receiver<CollisionEvent>,
     contact_force_reciever: channel::Receiver<ContactForceEvent>
 }
@@ -36,9 +41,11 @@ impl PhysicsSimulation {
         let (collision_send, collision_recv) = channel::unbounded();
         let (contact_force_send, contact_force_recv) = channel::unbounded();
         let event_handler = ChannelEventCollector::new(collision_send, contact_force_send);
+        let mut rigid_body_set = RigidBodySet::new();
+        let friction_anchor = rigid_body_set.insert(RigidBodyBuilder::fixed().build());
         Self {
             gravity: vector![gravity.x, gravity.y],
-            rigid_body_set: RigidBodySet::new(),
+            rigid_body_set,
             collider_set: ColliderSet::new(),
             physics_pipeline: PhysicsPipeline::new(),
             integration_parameters: IntegrationParameters::default(),
@@ -50,6 +57,7 @@ impl PhysicsSimulation {
             ccd_solver: CCDSolver::new(),
             event_handler,
             query_pipeline: QueryPipeline::new(),
+            friction_anchor,
             collision_reciever: collision_recv,
             contact_force_reciever: contact_force_recv
         }
@@ -150,6 +158,28 @@ impl PhysicsSimulation {
     /// For consistency, its usually best to use a constant timestep.
     pub fn step(&mut self, time: f32) -> (Vec<CollisionEvent>, Vec<ContactForceEvent>){
         self.integration_parameters.dt = time;
+
+        // Distribute world friction to be axis-independent
+        let friction_joints: Vec<_> = self.impulse_joint_set.attached_joints(self.friction_anchor)
+            .map(|joint_info| (joint_info.0, joint_info.1, joint_info.2)).collect();
+        for joint in friction_joints {
+            if let (Some(impulse_joint), Some(body)) =
+                (self.impulse_joint_set.get_mut(joint.2, false), self.rigid_body_set.get(joint.1))
+            {
+                let velocity = body.velocity_at_point(&impulse_joint.data.local_anchor2());
+                if velocity.magnitude_squared() > 0.0 {
+                    let axis = UnitVector2::new_normalize(velocity);
+                    // AngX is turned off, but its max_force is still used to store the friction force
+                    let max_force_ang = impulse_joint.data.motors[JointAxis::AngX as usize].max_force;
+                    let total_max_force = max_force_ang;
+                    impulse_joint.data.set_motor_max_force(JointAxis::LinX, total_max_force * axis.x.abs());
+                    impulse_joint.data.set_motor_velocity(JointAxis::LinX, 0.0, 0.0);
+                    impulse_joint.data.set_motor_max_force(JointAxis::LinY, total_max_force * axis.y.abs());
+                    impulse_joint.data.set_motor_velocity(JointAxis::LinY, 0.0, 0.0);
+                }
+            }
+        }
+
         self.physics_pipeline.step(
             &self.gravity,
             &self.integration_parameters,
@@ -177,6 +207,36 @@ impl PhysicsSimulation {
             contact_force_events.push(contact_force_event);
         }
         (collision_events, contact_force_events)
+    }
+
+    /// Add friction between the object and the world
+    /// Useful for top-down perspective
+    ///
+    /// - body: The body to which friction will be added
+    /// - coefficient: The coefficient of friction between the body and the world.
+    ///                This will apply force scaled by the body's mass.
+    /// - torque: Affects how strongly spinning is stopped.
+    pub fn add_world_friction(&mut self, body: RigidBodyHandle, coefficient: f32, torque: f32)
+    {
+        if let Some(rigid_body) = self.rigid_body_set.get(body) {
+            let force = coefficient * rigid_body.mass();
+            let com = rigid_body.center_of_mass() - rigid_body.translation();
+            self.add_world_friction_point(body, vec2(com.x - torque, com.y), force / 2.0);
+            self.add_world_friction_point(body, vec2(com.x + torque, com.y), force / 2.0);
+        }
+    }
+
+    // Adds a single point of friction. This does not affect rotation
+    fn add_world_friction_point(&mut self, body: RigidBodyHandle, point: Vec2, force: f32) {
+        let joint = GenericJointBuilder::new(JointAxesMask::empty())
+            .motor_velocity(JointAxis::LinX, 0.0, 0.0)
+            .motor_max_force(JointAxis::LinX, force)
+            .motor_velocity(JointAxis::LinY, 0.0, 0.0)
+            .motor_max_force(JointAxis::LinY, force)
+            // AngX isn't set, but storing the force there prevents drift
+            .motor_max_force(JointAxis::AngX, force)
+            .local_anchor2([point.x, point.y].into());
+        self.impulse_joint_set.insert(self.friction_anchor, body, joint, false);
     }
 
     /// Draw the colliders of the simulation onto camera space
