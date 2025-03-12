@@ -13,9 +13,10 @@ Features:
 
 * `physics.rs` single file containing all library functions (See note)
 * `PhysicsSimulation` struct to keep all of your important state in one place
-* `draw_debug` function to see what's going on
+* `draw_colliders` function to see what's going on
 * `get_bodies_at_point` function to sample a point in a single line of code
 * `step` function that only takes one f32 argument
+* `add_world_friction` Add more realistic top-down friction
 * `load_svg_physics_sprite` No more counting pixels to outline your sprites.
   Just open the image in inkscape, draw an outline, and save with the image
   embedded. This function will load the texture, and use all of the paths it
@@ -26,9 +27,7 @@ presenting no obstruction to doing more complex things.
 Rapier2D is confusing. If nothing else, this can work as a reference for how
 to do a few basic things.
 
-Note: When rendering, this library matches screen units to camera units, and
-if the y axis of the camera is down, rapier's rotation will be inverted
-(because it uses a coordinate system with the y axis up).
+Note: `draw_colliders` matches screen units to camera units.
 
 Simple Example
 ==============
