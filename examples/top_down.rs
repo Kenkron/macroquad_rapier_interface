@@ -24,6 +24,7 @@ async fn main() {
     physics_sprites.push(
         PhysicsSprite {
             texture: brick_texture.clone(),
+            texture_region: None,
             size: vec2(8.0, 1.0),
             body: simulation.create_body(
                 &RigidBodyBuilder::fixed().translation([4.0, -0.5].into()),
@@ -34,6 +35,7 @@ async fn main() {
     elevators.push(
         PhysicsSprite {
             texture: brick_texture.clone(),
+            texture_region: None,
             size: vec2(1.0, 1.0),
             body: simulation.create_body(
                 &RigidBodyBuilder::kinematic_velocity_based().translation([7.0, -0.5].into()),
@@ -118,6 +120,7 @@ fn spawn_ball(simulation: &mut PhysicsSimulation, location: Vec2, texture: Textu
     simulation.add_world_friction(body, 1.0, 1.0);
     PhysicsSprite{
         texture,
+        texture_region: None,
         body,
         size: vec2(1.0, 1.0)}
 }
@@ -130,6 +133,7 @@ fn spawn_block(simulation: &mut PhysicsSimulation, location: Vec2, texture: Text
     simulation.add_world_friction(body, 1.0, 1.0);
     PhysicsSprite{
         texture,
+        texture_region: None,
         body,
         size: vec2(1.0, 1.0)}
 }

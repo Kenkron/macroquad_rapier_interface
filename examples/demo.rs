@@ -19,6 +19,7 @@ async fn main() {
     sprites.push(
         PhysicsSprite {
             texture: brick_texture.clone(),
+            texture_region: None,
             size: vec2(8.0, 1.0),
             body: simulation.create_body(
                 &RigidBodyBuilder::fixed().translation([4.0, -0.5].into()),
@@ -29,6 +30,7 @@ async fn main() {
     elevators.push(
         PhysicsSprite {
             texture: brick_texture.clone(),
+            texture_region: None,
             size: vec2(1.0, 1.0),
             body: simulation.create_body(
                 &RigidBodyBuilder::kinematic_velocity_based().translation([7.0, -0.5].into()),
@@ -106,6 +108,7 @@ async fn main() {
 fn spawn_ball(simulation: &mut PhysicsSimulation, location: Vec2, texture: Texture2D) -> PhysicsSprite {
     PhysicsSprite{
         texture,
+        texture_region: None,
         body: simulation.create_body(
             &RigidBodyBuilder::dynamic().translation(to_physics_vector(location)),
             &vec![ColliderBuilder::ball(0.5)]),
@@ -115,6 +118,7 @@ fn spawn_ball(simulation: &mut PhysicsSimulation, location: Vec2, texture: Textu
 fn spawn_block(simulation: &mut PhysicsSimulation, location: Vec2, texture: Texture2D) -> PhysicsSprite {
     PhysicsSprite{
         texture,
+        texture_region: None,
         body: simulation.create_body(
             &RigidBodyBuilder::dynamic().translation(to_physics_vector(location)),
             &vec![ColliderBuilder::cuboid(0.5, 0.5)]),

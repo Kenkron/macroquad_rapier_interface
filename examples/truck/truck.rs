@@ -58,6 +58,7 @@ impl Truck {
         let rear_wheel_body = RigidBodyBuilder::new(RigidBodyType::Dynamic).translation(rear_wheel_location);
         let rear_wheel = PhysicsSprite {
             texture: wheel_texture.clone(),
+            texture_region: None,
             body: simulation.create_body(&rear_wheel_body, &wheel_colliders),
             size: Vec2::splat(WHEEL_RADIUS * 2.0)
         };
@@ -69,6 +70,7 @@ impl Truck {
             .translation(front_wheel_location);
         let front_wheel = PhysicsSprite {
             texture: wheel_texture.clone(),
+            texture_region: None,
             body: simulation.create_body(&front_wheel_body, &wheel_colliders),
             size: Vec2::splat(WHEEL_RADIUS * 2.0)
         };

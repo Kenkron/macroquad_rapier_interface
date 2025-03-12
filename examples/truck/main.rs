@@ -20,6 +20,7 @@ fn make_box(physics: &mut PhysicsSimulation, texture: &Texture2D, rect: Rect, dy
     ];
     return PhysicsSprite{
         texture: texture.clone(),
+        texture_region: None,
         body: physics.create_body(&body_builder, &collider_builders),
         size: vec2(rect.w, rect.h)
     }
@@ -37,6 +38,7 @@ fn make_ball(physics: &mut PhysicsSimulation, texture: &Texture2D, circle: Circl
     ];
     return PhysicsSprite{
         texture: texture.clone(),
+        texture_region: None,
         body: physics.create_body(&body_builder, &collider_builders),
         size: Vec2::splat(circle.radius() * 2.0)
     }

@@ -12,6 +12,7 @@ use crate::physics::*;
 /// and colliders.
 pub struct PhysicsSpriteBuilder {
     texture: Texture2D,
+    texture_region: Option<Rect>,
     size: Vec2,
     colliders: Vec<ColliderBuilder>
 }
@@ -23,6 +24,7 @@ impl PhysicsSpriteBuilder {
         PhysicsSprite {
             body: simulation.create_body(body, &self.colliders),
             texture: self.texture.clone(),
+            texture_region: self.texture_region,
             size: self.size
         }
     }
@@ -60,7 +62,11 @@ pub fn load_svg_physics_sprite(
         result.shape = shaped_collider.shape.clone();
         result
     }).collect();
-    Some(PhysicsSpriteBuilder { colliders, texture, size })
+    Some(PhysicsSpriteBuilder {
+        colliders,
+        texture,
+        texture_region: None,
+        size })
 }
 
 /// An easy way to create a shaped physics object is to open an image

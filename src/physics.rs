@@ -258,10 +258,12 @@ impl PhysicsSimulation {
 pub struct PhysicsSprite {
     /// The appearance of the sprite, centered on the origin
     pub texture: Texture2D,
+    /// Optional region of the texture to draw
+    pub texture_region: Option<Rect>,
     /// The size of the sprite, irrespective of texture resolution
     pub size: Vec2,
     /// The physical body for this sprite
-    pub body: RigidBodyHandle
+    pub body: RigidBodyHandle,
 }
 
 impl PhysicsSprite {
@@ -284,6 +286,7 @@ impl PhysicsSprite {
                 DrawTextureParams{
                     rotation: body_rotation,
                     dest_size: Some(size),
+                    source: self.texture_region,
                     .. Default::default()
                 });
         }
