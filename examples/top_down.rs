@@ -115,9 +115,11 @@ async fn main() {
 fn spawn_ball(simulation: &mut PhysicsSimulation, location: Vec2, texture: Texture2D) -> PhysicsSprite {
     let linvel = vector![macroquad::rand::gen_range(-2.0, 2.0), macroquad::rand::gen_range(-2.0, 2.0)];
     let body = simulation.create_body(
-        &RigidBodyBuilder::dynamic().translation(to_physics_vector(location)).gravity_scale(0.0).linvel(linvel),
+        &RigidBodyBuilder::dynamic().translation(to_physics_vector(location)).gravity_scale(0.0).linvel(linvel).lock_rotations(),
         &vec![ColliderBuilder::ball(0.5)]);
-    simulation.add_world_friction(body, 1.0, 1.0);
+    if let Some(joint) = simulation.add_world_friction_point(body, vec2(0.0, 0.0), 1.0) {
+        simulation.set_target_velocity_2d(joint, vec2(-linvel.x, -linvel.y));
+    }
     PhysicsSprite{
         texture,
         texture_region: None,

@@ -167,15 +167,17 @@ impl PhysicsSimulation {
                 (self.impulse_joint_set.get_mut(joint.2, false), self.rigid_body_set.get(joint.1))
             {
                 let velocity = body.velocity_at_point(&impulse_joint.data.local_anchor2());
-                if velocity.magnitude_squared() > 0.0 {
-                    let axis = UnitVector2::new_normalize(velocity);
+                let target_velocity = vector![
+                    impulse_joint.data.motors[JointAxis::LinX as usize].target_vel,
+                    impulse_joint.data.motors[JointAxis::LinY as usize].target_vel];
+                let relative_velocity = target_velocity - velocity;
+                if relative_velocity.magnitude_squared() > 0.0 {
+                    let axis = UnitVector2::new_normalize(relative_velocity);
                     // AngX is turned off, but its max_force is still used to store the friction force
                     let max_force_ang = impulse_joint.data.motors[JointAxis::AngX as usize].max_force;
                     let total_max_force = max_force_ang;
                     impulse_joint.data.set_motor_max_force(JointAxis::LinX, total_max_force * axis.x.abs());
-                    impulse_joint.data.set_motor_velocity(JointAxis::LinX, 0.0, 0.0);
                     impulse_joint.data.set_motor_max_force(JointAxis::LinY, total_max_force * axis.y.abs());
-                    impulse_joint.data.set_motor_velocity(JointAxis::LinY, 0.0, 0.0);
                 }
             }
         }
@@ -219,24 +221,35 @@ impl PhysicsSimulation {
     pub fn add_world_friction(&mut self, body: RigidBodyHandle, coefficient: f32, torque: f32)
     {
         if let Some(rigid_body) = self.rigid_body_set.get(body) {
-            let force = coefficient * rigid_body.mass();
             let com = rigid_body.center_of_mass() - rigid_body.translation();
-            self.add_world_friction_point(body, vec2(com.x - torque, com.y), force / 2.0);
-            self.add_world_friction_point(body, vec2(com.x + torque, com.y), force / 2.0);
+            self.add_world_friction_point(body, vec2(com.x - torque, com.y), coefficient / 2.0);
+            self.add_world_friction_point(body, vec2(com.x + torque, com.y), coefficient / 2.0);
         }
     }
 
     // Adds a single point of friction. This does not affect rotation
-    fn add_world_friction_point(&mut self, body: RigidBodyHandle, point: Vec2, force: f32) {
-        let joint = GenericJointBuilder::new(JointAxesMask::empty())
-            .motor_velocity(JointAxis::LinX, 0.0, 0.0)
-            .motor_max_force(JointAxis::LinX, force)
-            .motor_velocity(JointAxis::LinY, 0.0, 0.0)
-            .motor_max_force(JointAxis::LinY, force)
-            // AngX isn't set, but storing the force there prevents drift
-            .motor_max_force(JointAxis::AngX, force)
-            .local_anchor2([point.x, point.y].into());
-        self.impulse_joint_set.insert(self.friction_anchor, body, joint, false);
+    pub fn add_world_friction_point(&mut self, body: RigidBodyHandle, point: Vec2, coefficient: f32) -> Option<ImpulseJointHandle>{
+        if let Some(rigid_body) = self.rigid_body_set.get(body) {
+            let force = coefficient * rigid_body.mass();
+            let joint = GenericJointBuilder::new(JointAxesMask::empty())
+                .motor_velocity(JointAxis::LinX, 0.0, 0.0)
+                .motor_max_force(JointAxis::LinX, force)
+                .motor_velocity(JointAxis::LinY, 0.0, 0.0)
+                .motor_max_force(JointAxis::LinY, force)
+                // AngX isn't set, but storing the force there prevents drift
+                .motor_max_force(JointAxis::AngX, force)
+                .local_anchor2([point.x, point.y].into());
+            Some(self.impulse_joint_set.insert(self.friction_anchor, body, joint, false))
+        } else {
+            None
+        }
+    }
+
+    pub fn set_target_velocity_2d(&mut self, joint: ImpulseJointHandle, target_velocity: Vec2) {
+        if let Some(joint) = self.impulse_joint_set.get_mut(joint, false) {
+            joint.data.motors[JointAxis::LinX as usize].target_vel = target_velocity.x;
+            joint.data.motors[JointAxis::LinY as usize].target_vel = target_velocity.y;
+        }
     }
 
     /// Draw the colliders of the simulation onto camera space
